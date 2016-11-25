@@ -1,65 +1,34 @@
 package lib
 
 import (
-	"encoding/json"
+	"gopkg.in/mgo.v2"
 	"log"
-	"os"
-	"sync"
 )
 
-type FileStore struct {
-	sync.RWMutex
-	cookies map[string]Player
-}
+var Session *mgo.Session
+var DB *mgo.Database
+var Players *mgo.Collection
 
-func NewFileStore() *FileStore {
-	return &FileStore{cookies: map[string]Player{}}
-}
-
-func (c *FileStore) Get(key string) (Player, bool) {
-	c.RLock()
-	defer c.RUnlock()
-	p, ok := c.cookies[key]
-	return p, ok
-}
-
-func (c *FileStore) Delete(key string) {
-	c.Lock()
-	defer c.Unlock()
-	delete(c.cookies, key)
-}
-
-func (c *FileStore) Set(player Player) {
-	c.Lock()
-	c.cookies[player.Id()] = player
-	c.Unlock()
-	c.Save()
-}
-
-func (c *FileStore) Save() {
-	c.RLock()
-	defer c.RUnlock()
-	file, err := os.Create("cookies.json")
+func init() {
+	Session, err := mgo.Dial("127.0.0.1:27017")
 	if err != nil {
-		log.Println(err)
-		return
+		log.Fatal(err)
 	}
-	if err = json.NewEncoder(file).Encode(c.cookies); err != nil {
-		log.Println(err)
-	}
+	DB = Session.DB("lobby")
+	Players = DB.C("players")
 }
 
-func (c *FileStore) Load() error {
-	c.Lock()
-	defer c.Unlock()
-	file, err := os.Open("cookies.json")
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	if err = json.NewDecoder(file).Decode(&c.cookies); err != nil {
-		log.Println(err)
-		return err
-	}
-	return nil
+func FindPlayer(id string) (*Player, error) {
+	p := &Player{}
+	err := Players.FindId(id).One(p)
+	return p, err
+}
+
+func InsertPlayer(p *Player) error {
+	return Players.Insert(p)
+}
+
+func UpdatePlayer(p *Player) error {
+	_, err := Players.UpsertId(p.ID, p)
+	return err
 }

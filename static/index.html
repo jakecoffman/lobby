@@ -60,7 +60,7 @@
     if (val === "") {
       return;
     }
-    var msg = JSON.stringify({type: 'SAY', message: val});
+    var msg = JSON.stringify({type: 0, cmd: {message: val}});
     console.log("Sending", msg);
     ws.send(msg);
     message.value = '';
@@ -68,7 +68,7 @@
 
   function changeName() {
     var name = document.getElementById('name');
-    var msg = JSON.stringify({type: 'NAME', name: name.value});
+    var msg = JSON.stringify({type: 1, cmd: {message: name.value}});
     ws.send(msg)
   }
 

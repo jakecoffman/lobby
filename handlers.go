@@ -1,11 +1,10 @@
-package server
+package lobby
 
 import (
 	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jakecoffman/lobby"
 	"github.com/jakecoffman/lobby/lib"
 	"golang.org/x/net/websocket"
 )
@@ -14,28 +13,22 @@ const (
 	playerId = "GAME"
 )
 
-var fileStore *lib.FileStore
-
-func init() {
-	fileStore = lib.NewFileStore()
-}
-
 func RegisterHandler(ctx *gin.Context) {
 	cookie, err := ctx.Request.Cookie(playerId)
 	switch {
 	case err == nil:
-		if _, ok := fileStore.Get(cookie.Value); ok {
+		if _, err := lib.FindPlayer(cookie.Value); err == nil {
 			// good, we have a cookie and a player
 			return
 		}
 		log.Println("Database was reset?")
-		fileStore.Delete(cookie.Value)
 		fallthrough
 	case err == http.ErrNoCookie:
 		player := lib.NewPlayer()
-		cookie = &http.Cookie{Name: playerId, Value: player.Id()}
-		fileStore.Set(*player)
-		// this works somehow even though we're about to upgrade to a websocket
+		cookie = &http.Cookie{Name: playerId, Value: player.ID}
+		if err := lib.InsertPlayer(player); err != nil {
+			log.Println(err)
+		}
 		http.SetCookie(ctx.Writer, cookie)
 	default:
 		log.Println(err)
@@ -55,13 +48,13 @@ func webSocketHandler(conn *websocket.Conn) {
 		conn.Close()
 		return
 	}
-	player, ok := fileStore.Get(cookie.Value)
-	if !ok {
+	player, err := lib.FindPlayer(cookie.Value)
+	if err != nil {
 		websocket.JSON.Send(conn, map[string]string{"error": "No player for cookie"})
 		conn.Close()
 		return
 	}
 	player.Connect(conn)
 
-	lobby.Lobby.Play(&player, fileStore)
+	Lobby.Play(player)
 }

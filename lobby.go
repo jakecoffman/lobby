@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,56 +12,77 @@ import (
 var Lobby *lobby
 
 func init() {
-	// lobby is a singleton
 	Lobby = NewLobby()
 	go Lobby.run()
+}
+
+type SimpleCommand struct {
+	Player  *lib.Player
+	Message string
 }
 
 type lobby struct {
 	// all players in the lobby
 	players map[string]*lib.Player
 
-	// channels used to communicate to the main lobby
-	say   chan string
-	join  chan *lib.Player
-	leave chan *lib.Player
+	// commands from player
+	join   chan *lib.Player
+	leave  chan *lib.Player
+	say    chan SimpleCommand
+	rename chan SimpleCommand
+
+	// updates to player
 }
 
 func NewLobby() *lobby {
 	return &lobby{
 		players: map[string]*lib.Player{},
-		say:     make(chan string),
 		join:    make(chan *lib.Player),
 		leave:   make(chan *lib.Player),
+		say:     make(chan SimpleCommand),
+		rename:  make(chan SimpleCommand),
 	}
 }
 
-// this is the main player game loop for the lobby
-func (l *lobby) Play(player *lib.Player, db *lib.FileStore) {
+const (
+	SAY int = iota
+	NAME
+)
+
+// This is the main player game loop for the lobby. It just reads messages and dispatches
+// to the lobby. The lobby is what sends messages back to the players and changes the player objects.
+func (l *lobby) Play(player *lib.Player) {
 	// player automatically joins lobby
 	l.join <- player
 	defer func() {
 		l.leave <- player
 	}()
 
-	incoming := map[string]interface{}{}
+	incoming := struct {
+		Type    int             `json:"type"`
+		Command json.RawMessage `json:"cmd"`
+	}{}
 	for {
 		if err := player.Receive(&incoming); err != nil {
-			if err != io.EOF {
-				log.Println(err)
-			}
 			return
 		}
 
 		switch {
-		case incoming["type"] == "SAY":
-			m := incoming["message"].(string)
-			l.say <- fmt.Sprintf("Player %s: %s", player.Name(), m)
-		case incoming["type"] == "NAME":
-			name := incoming["name"].(string)
-			player.SetName(name)
-			db.Set(*player)
-			db.Save()
+		case incoming.Type == SAY:
+			cmd := &SimpleCommand{}
+			if err := json.Unmarshal(incoming.Command, cmd); err != nil {
+				log.Println(string(incoming.Command), err)
+				continue
+			}
+			l.say <- SimpleCommand{Player: player, Message: cmd.Message}
+		case incoming.Type == NAME:
+			cmd := SimpleCommand{}
+			if err := json.Unmarshal(incoming.Command, &cmd); err != nil {
+				log.Println(err)
+				continue
+			}
+			cmd.Player = player
+			l.rename <- SimpleCommand{Player: player, Message: cmd.Message}
 		default:
 			log.Println("Unknown message type", incoming)
 		}
@@ -72,13 +94,20 @@ func (l *lobby) run() {
 	for {
 		select {
 		case player := <-l.join:
-			l.players[player.Id()] = player
-			l.broadcast(fmt.Sprintln("Player", player.Name(), "joined"))
+			l.players[player.ID] = player
+			l.broadcast(fmt.Sprintln("Player", player.GetName(), "joined"))
 		case player := <-l.leave:
-			delete(l.players, player.Id())
-			l.broadcast(fmt.Sprintln("Player", player.Name(), "left"))
-		case m := <-l.say:
-			l.broadcast(m)
+			delete(l.players, player.ID)
+			l.broadcast(fmt.Sprintln("Player", player.GetName(), "left"))
+		case cmd := <-l.say:
+			l.broadcast(fmt.Sprintf("%s: %s", cmd.Player.GetName(), cmd.Message))
+		case cmd := <-l.rename:
+			previousName := cmd.Player.GetName()
+			cmd.Player.Name = cmd.Message
+			if err := lib.UpdatePlayer(cmd.Player); err != nil {
+				log.Println(err)
+			}
+			l.broadcast(fmt.Sprintf("%s is now known as %s", previousName, cmd.Player.GetName()))
 		}
 	}
 }
@@ -89,12 +118,10 @@ type say struct {
 }
 
 func (l *lobby) send(message string, player *lib.Player) {
-	msg := say{Type: "say", Message: message}
-	if err := player.Send(msg); err != nil {
+	if err := player.Send(say{Type: "say", Message: message}); err != nil {
 		if err != io.EOF {
-			log.Println("Error sending to player", player.Id(), "so removing them from lobby")
+			log.Println("Error sending to player", player.ID, ":", err)
 		}
-		delete(l.players, player.Id())
 	}
 }
 
