@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/jakecoffman/lobby/lib"
 	"golang.org/x/net/websocket"
@@ -42,17 +43,32 @@ func WebSocketHandler(ctx *gin.Context) {
 }
 
 func webSocketHandler(conn *websocket.Conn) {
+	var player *lib.Player
+	var err error
 	cookie, err := conn.Request().Cookie(playerId)
 	if err != nil {
-		websocket.JSON.Send(conn, map[string]string{"error": "Invalid cookie"})
-		conn.Close()
-		return
-	}
-	player, err := lib.FindPlayer(cookie.Value)
-	if err != nil {
-		websocket.JSON.Send(conn, map[string]string{"error": "No player for cookie"})
-		conn.Close()
-		return
+		player = lib.NewPlayer()
+		cookie = &http.Cookie{Name: playerId, Value: player.ID}
+		if err := lib.InsertPlayer(player); err != nil {
+			log.Println(err)
+		}
+		websocket.JSON.Send(conn, map[string]string{
+			"type":   "cookie",
+			"cookie": fmt.Sprintf("%s=%s; path=/;", playerId, player.ID),
+		})
+	} else {
+		player, err = lib.FindPlayer(cookie.Value)
+		if err != nil {
+			player = lib.NewPlayer()
+			cookie = &http.Cookie{Name: playerId, Value: player.ID}
+			if err := lib.InsertPlayer(player); err != nil {
+				log.Println(err)
+			}
+			websocket.JSON.Send(conn, map[string]string{
+				"type":   "cookie",
+				"cookie": fmt.Sprintf("%s=%s; path=/;", playerId, player.ID),
+			})
+		}
 	}
 	player.Connect(conn)
 
