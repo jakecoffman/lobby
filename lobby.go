@@ -21,9 +21,16 @@ type SimpleCommand struct {
 	Message string
 }
 
+type Game interface {
+	Join()
+	Leave()
+	Send()
+}
+
 type lobby struct {
 	// all players in the lobby
 	players map[string]*lib.Player
+	games map[string]Game
 
 	// commands from player
 	join   chan *lib.Player
@@ -47,6 +54,9 @@ func NewLobby() *lobby {
 const (
 	SAY int = iota
 	NAME
+	NEW
+	JOIN
+	GAME
 )
 
 // This is the main player game loop for the lobby. It just reads messages and dispatches
@@ -67,22 +77,24 @@ func (l *lobby) Play(player *lib.Player) {
 			return
 		}
 
+		cmd := &SimpleCommand{}
+		if err := json.Unmarshal(incoming.Command, cmd); err != nil {
+			log.Println(string(incoming.Command), err)
+			continue
+		}
+		cmd.Player = player
+
 		switch {
 		case incoming.Type == SAY:
-			cmd := &SimpleCommand{}
-			if err := json.Unmarshal(incoming.Command, cmd); err != nil {
-				log.Println(string(incoming.Command), err)
-				continue
-			}
-			l.say <- SimpleCommand{Player: player, Message: cmd.Message}
+			l.say <- cmd
 		case incoming.Type == NAME:
-			cmd := SimpleCommand{}
-			if err := json.Unmarshal(incoming.Command, &cmd); err != nil {
-				log.Println(err)
-				continue
-			}
-			cmd.Player = player
-			l.rename <- SimpleCommand{Player: player, Message: cmd.Message}
+			l.rename <- cmd
+		case incoming.Type == NEW:
+			// create a new game in a goroutine and join it
+		case incoming.Type == JOIN:
+			// look up by game join number and join go routine
+		case incoming.Type == GAME:
+			// forward message to the game
 		default:
 			log.Println("Unknown message type", incoming)
 		}
