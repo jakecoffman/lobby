@@ -13,7 +13,7 @@ const (
 	playerId = "GAME"
 )
 
-func RegisterHandler(ctx *gin.Context) {
+func UserHandler(ctx *gin.Context) {
 	cookie, err := ctx.Request.Cookie(playerId)
 	switch {
 	case err == nil:
