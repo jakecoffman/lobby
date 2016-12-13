@@ -16,7 +16,7 @@ func init() {
 	go Lobby.run()
 }
 
-type SimpleCommand struct {
+type SimpleCmd struct {
 	Player  *lib.Player
 	Message string
 }
@@ -30,15 +30,13 @@ type Game interface {
 type lobby struct {
 	// all players in the lobby
 	players map[string]*lib.Player
-	games map[string]Game
+	games   map[string]Game
 
 	// commands from player
 	join   chan *lib.Player
 	leave  chan *lib.Player
-	say    chan SimpleCommand
-	rename chan SimpleCommand
-
-	// updates to player
+	say    chan *SimpleCmd
+	rename chan *SimpleCmd
 }
 
 func NewLobby() *lobby {
@@ -46,8 +44,8 @@ func NewLobby() *lobby {
 		players: map[string]*lib.Player{},
 		join:    make(chan *lib.Player),
 		leave:   make(chan *lib.Player),
-		say:     make(chan SimpleCommand),
-		rename:  make(chan SimpleCommand),
+		say:     make(chan *SimpleCmd),
+		rename:  make(chan *SimpleCmd),
 	}
 }
 
@@ -59,6 +57,11 @@ const (
 	GAME
 )
 
+type PlayerCmd struct {
+	Type    int             `json:"type"`
+	Command json.RawMessage `json:"cmd"`
+}
+
 // This is the main player game loop for the lobby. It just reads messages and dispatches
 // to the lobby. The lobby is what sends messages back to the players and changes the player objects.
 func (l *lobby) Play(player *lib.Player) {
@@ -68,16 +71,16 @@ func (l *lobby) Play(player *lib.Player) {
 		l.leave <- player
 	}()
 
-	incoming := struct {
-		Type    int             `json:"type"`
-		Command json.RawMessage `json:"cmd"`
-	}{}
+	incoming := &PlayerCmd{}
 	for {
-		if err := player.Receive(&incoming); err != nil {
+		if err := player.Receive(incoming); err != nil {
+			if err != io.EOF {
+				log.Println(err)
+			}
 			return
 		}
 
-		cmd := &SimpleCommand{}
+		cmd := &SimpleCmd{}
 		if err := json.Unmarshal(incoming.Command, cmd); err != nil {
 			log.Println(string(incoming.Command), err)
 			continue
@@ -107,10 +110,11 @@ func (l *lobby) run() {
 		select {
 		case player := <-l.join:
 			l.players[player.ID] = player
-			l.broadcast(fmt.Sprintln("Player", player.GetName(), "joined"))
+			l.broadcast(fmt.Sprint("Player ", player.GetName(), " joined"))
 		case player := <-l.leave:
 			delete(l.players, player.ID)
-			l.broadcast(fmt.Sprintln("Player", player.GetName(), "left"))
+			player.Disconnect()
+			l.broadcast(fmt.Sprint("Player ", player.GetName(), " left"))
 		case cmd := <-l.say:
 			l.broadcast(fmt.Sprintf("%s: %s", cmd.Player.GetName(), cmd.Message))
 		case cmd := <-l.rename:

@@ -52,10 +52,6 @@ func webSocketHandler(conn *websocket.Conn) {
 		if err := lib.InsertPlayer(player); err != nil {
 			log.Println(err)
 		}
-		websocket.JSON.Send(conn, map[string]string{
-			"type":   "cookie",
-			"cookie": fmt.Sprintf("%s=%s; path=/;", playerId, player.ID),
-		})
 	} else {
 		player, err = lib.FindPlayer(cookie.Value)
 		if err != nil {
@@ -64,13 +60,16 @@ func webSocketHandler(conn *websocket.Conn) {
 			if err := lib.InsertPlayer(player); err != nil {
 				log.Println(err)
 			}
-			websocket.JSON.Send(conn, map[string]string{
-				"type":   "cookie",
-				"cookie": fmt.Sprintf("%s=%s; path=/;", playerId, player.ID),
-			})
 		}
 	}
-	player.Connect(conn)
+	player.Connect(&lib.WsConn{Conn: conn})
+	if err = player.Send(map[string]string{
+		"type":   "cookie",
+		"cookie": fmt.Sprintf("%s=%s; path=/;", playerId, player.ID),
+	}); err != nil {
+		log.Println("Player didn't get updated cookie", err)
+		return
+	}
 
 	Lobby.Play(player)
 }

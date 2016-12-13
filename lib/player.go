@@ -1,17 +1,13 @@
 package lib
 
 import (
-	"io"
-
-	"golang.org/x/net/websocket"
 	"gopkg.in/mgo.v2/bson"
-	"log"
 )
 
 type Player struct {
 	ID         string `bson:"_id"`
 	Name       string
-	connection *websocket.Conn
+	connection Connector
 }
 
 func NewPlayer() *Player {
@@ -22,11 +18,11 @@ func (p Player) GetName() string {
 	if p.Name != "" {
 		return p.Name
 	} else {
-		return p.ID[len(p.ID) - 5 : len(p.ID)]
+		return p.ID[len(p.ID)-5 : len(p.ID)]
 	}
 }
 
-func (p *Player) Connect(connection *websocket.Conn) {
+func (p *Player) Connect(connection Connector) {
 	p.connection = connection
 }
 
@@ -35,16 +31,9 @@ func (p *Player) Disconnect() {
 }
 
 func (p *Player) Send(v interface{}) error {
-	return websocket.JSON.Send(p.connection, v)
+	return p.connection.Send(v)
 }
 
 func (p *Player) Receive(v interface{}) error {
-	err := websocket.JSON.Receive(p.connection, v)
-	if err != nil {
-		if err != io.EOF {
-			log.Println(err)
-		}
-		p.Disconnect()
-	}
-	return err
+	return p.connection.Recv(v)
 }
