@@ -3,6 +3,7 @@ package lobby
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jakecoffman/lobby/games/spyfall"
 	"github.com/jakecoffman/lobby/lib"
 	"io"
 	"log"
@@ -107,6 +108,8 @@ func TestWebSocketHandler(t *testing.T) {
 
 	say := &say{}
 
+	// Join
+
 	conn1.clientRecv(t, say)
 	if say.Message != fmt.Sprintf("Player %s joined", p1.GetName()) {
 		t.Fatal(say.Message, "!= Player", p1.GetName(), "joined")
@@ -123,6 +126,8 @@ func TestWebSocketHandler(t *testing.T) {
 		t.Fatal(say.Message, "!= Player", p2.GetName(), "joined")
 	}
 
+	// Say
+
 	msg := "Hello world!"
 	conn2.clientSend(t, m{"type": SAY, "cmd": m{"Message": "Hello world!"}})
 
@@ -136,6 +141,24 @@ func TestWebSocketHandler(t *testing.T) {
 		t.Fatal(say.Message, "!=", expected)
 	}
 
+	// Rename
+	previousName := p1.GetName()
+	conn1.clientSend(t, m{"type": NAME, "cmd": m{"Message": "Bob"}})
+
+	conn1.clientRecv(t, say)
+	expected = fmt.Sprintf("%s is now known as %s", previousName, p1.GetName())
+	if say.Message != expected {
+		t.Fatal(say.Message, "!=", expected)
+	}
+	conn2.clientRecv(t, say)
+	if say.Message != expected {
+		t.Fatal(say.Message, "!=", expected)
+	}
+	if p1.GetName() != "Bob" {
+		t.Fatal(p1.GetName(), "!=", "Bob")
+	}
+
+	// Leave
 	conn1.clientClose()
 
 	conn2.clientRecv(t, say)

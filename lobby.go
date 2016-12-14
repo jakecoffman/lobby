@@ -3,17 +3,34 @@ package lobby
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jakecoffman/lobby/lib"
 	"io"
 	"log"
-
-	"github.com/jakecoffman/lobby/lib"
+	"reflect"
 )
 
+// lobby singleton
 var Lobby *lobby
+
+// directory of games by name
+var registry map[string]lib.Game
+
+// directory of running games by short ID
+var games map[string]lib.Game
 
 func init() {
 	Lobby = NewLobby()
 	go Lobby.run()
+	registry = map[string]lib.Game{}
+	games = map[string]lib.Game{}
+}
+
+func Register(game lib.Game, name string) {
+	registry[name] = game
+}
+
+func (l *lobby) RunCallback(id string, game lib.Game) {
+	games[id] = game
 }
 
 type SimpleCmd struct {
@@ -21,31 +38,25 @@ type SimpleCmd struct {
 	Message string
 }
 
-type Game interface {
-	Join()
-	Leave()
-	Send()
-}
-
 type lobby struct {
 	// all players in the lobby
 	players map[string]*lib.Player
-	games   map[string]Game
+	games   map[string]lib.Game
 
 	// commands from player
-	join   chan *lib.Player
-	leave  chan *lib.Player
-	say    chan *SimpleCmd
-	rename chan *SimpleCmd
+	join       chan *lib.Player
+	disconnect chan *lib.Player
+	say        chan *SimpleCmd
+	rename     chan *SimpleCmd
 }
 
 func NewLobby() *lobby {
 	return &lobby{
-		players: map[string]*lib.Player{},
-		join:    make(chan *lib.Player),
-		leave:   make(chan *lib.Player),
-		say:     make(chan *SimpleCmd),
-		rename:  make(chan *SimpleCmd),
+		players:    map[string]*lib.Player{},
+		join:       make(chan *lib.Player),
+		disconnect: make(chan *lib.Player),
+		say:        make(chan *SimpleCmd),
+		rename:     make(chan *SimpleCmd),
 	}
 }
 
@@ -54,6 +65,7 @@ const (
 	NAME
 	NEW
 	JOIN
+	LEAVE
 	GAME
 )
 
@@ -65,13 +77,30 @@ type PlayerCmd struct {
 // This is the main player game loop for the lobby. It just reads messages and dispatches
 // to the lobby. The lobby is what sends messages back to the players and changes the player objects.
 func (l *lobby) Play(player *lib.Player) {
-	// player automatically joins lobby
+	var game lib.Game
+
 	l.join <- player
-	defer func() {
-		l.leave <- player
-	}()
+	defer func(g lib.Game) {
+		if g != nil {
+			g.Disconnect(player)
+		}
+		l.disconnect <- player
+	}(game)
+
+	var ok bool
+
+	// rejoin logic
+	if player.GameId != "" {
+		log.Println("Player is rejoining")
+		game, ok = games[player.GameId]
+		if ok {
+			game.Rejoin(player)
+		}
+	}
 
 	incoming := &PlayerCmd{}
+	cmd := &SimpleCmd{}
+
 	for {
 		if err := player.Receive(incoming); err != nil {
 			if err != io.EOF {
@@ -80,24 +109,43 @@ func (l *lobby) Play(player *lib.Player) {
 			return
 		}
 
-		cmd := &SimpleCmd{}
-		if err := json.Unmarshal(incoming.Command, cmd); err != nil {
-			log.Println(string(incoming.Command), err)
-			continue
+		if incoming.Type != GAME {
+			if err := json.Unmarshal(incoming.Command, cmd); err != nil {
+				log.Println(string(incoming.Command), err)
+				continue
+			}
 		}
 		cmd.Player = player
 
-		switch {
-		case incoming.Type == SAY:
+		switch incoming.Type {
+		case SAY:
 			l.say <- cmd
-		case incoming.Type == NAME:
+		case NAME:
 			l.rename <- cmd
-		case incoming.Type == NEW:
+		case NEW:
+			if game != nil {
+				game.Leave(player)
+			}
 			// create a new game in a goroutine and join it
-		case incoming.Type == JOIN:
-			// look up by game join number and join go routine
-		case incoming.Type == GAME:
-			// forward message to the game
+			game := reflect.New(reflect.TypeOf(registry[cmd.Message])).Elem().Interface().(lib.Game)
+			if game != nil {
+				go game.Run(l)
+				game.Join(player)
+			}
+		case JOIN:
+			game = games[cmd.Message]
+			if game != nil {
+				game.Join(player)
+			}
+		case LEAVE:
+			if game != nil {
+				game.Leave(player)
+				game = nil
+			}
+		case GAME:
+			if game != nil {
+				game.Send(&incoming.Command)
+			}
 		default:
 			log.Println("Unknown message type", incoming)
 		}
@@ -111,7 +159,7 @@ func (l *lobby) run() {
 		case player := <-l.join:
 			l.players[player.ID] = player
 			l.broadcast(fmt.Sprint("Player ", player.GetName(), " joined"))
-		case player := <-l.leave:
+		case player := <-l.disconnect:
 			delete(l.players, player.ID)
 			player.Disconnect()
 			l.broadcast(fmt.Sprint("Player ", player.GetName(), " left"))

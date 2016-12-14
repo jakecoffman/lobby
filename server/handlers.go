@@ -1,4 +1,4 @@
-package lobby
+package server
 
 import (
 	"log"
@@ -6,6 +6,7 @@ import (
 
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/jakecoffman/lobby"
 	"github.com/jakecoffman/lobby/lib"
 	"golang.org/x/net/websocket"
 )
@@ -71,5 +72,5 @@ func webSocketHandler(conn *websocket.Conn) {
 		return
 	}
 
-	Lobby.Play(player)
+	lobby.Lobby.Play(player)
 }

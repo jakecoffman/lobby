@@ -7,6 +7,7 @@ import (
 type Player struct {
 	ID         string `bson:"_id"`
 	Name       string
+	GameId     string
 	connection Connector
 }
 
