@@ -13,11 +13,11 @@ const (
 )
 
 type PlayerCmd struct {
-	Type    int             `json:"type"`
-	Command json.RawMessage `json:"cmd"`
+	Type int
+	Cmd  json.RawMessage
 
-	Player  *Player `json:"-"`
-	simple  string `json:"-"`
+	Player *Player `json:"-"`
+	simple string  `json:"-"`
 }
 
 func (p *PlayerCmd) SimpleCmd() (string, error) {
@@ -25,13 +25,13 @@ func (p *PlayerCmd) SimpleCmd() (string, error) {
 		return p.simple, nil
 	}
 	simple := &SimpleCmd{}
-	if err := json.Unmarshal(p.Command, &simple); err != nil {
+	if err := json.Unmarshal(p.Cmd, &simple); err != nil {
 		return "", err
 	}
-	p.simple = simple.Message
-	return simple.Message, nil
+	p.simple = simple.Msg
+	return simple.Msg, nil
 }
 
 type SimpleCmd struct {
-	Message string
+	Msg string
 }

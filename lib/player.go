@@ -22,10 +22,9 @@ type Player struct {
 	game     Game
 }
 
-func NewPlayer(registry Registry) *Player {
+func NewPlayer() *Player {
 	return &Player{
-		ID:       bson.NewObjectId().Hex(),
-		registry: registry,
+		ID: bson.NewObjectId().Hex(),
 	}
 }
 
@@ -37,8 +36,9 @@ func (p Player) GetName() string {
 	}
 }
 
-func (p *Player) Connect(connection Connector) {
+func (p *Player) Connect(connection Connector, registry Registry) {
 	p.Lock()
+	p.registry = registry
 	p.connection = connection
 	p.Connected = true
 	p.recv = make(chan *PlayerCmd)
@@ -111,6 +111,7 @@ func (p *Player) handle(cmd *PlayerCmd) {
 			log.Println(err)
 			return
 		}
+		log.Println("Player", p.GetName(), "started game", p.game)
 	case JOIN:
 		if simple, err = cmd.SimpleCmd(); err != nil {
 			// TODO: send error message
@@ -126,7 +127,9 @@ func (p *Player) handle(cmd *PlayerCmd) {
 		return
 	}
 	// send to game if there is one
-	p.game.Send(cmd)
+	if p.game != nil {
+		p.game.Send(cmd)
+	}
 }
 
 func (p *Player) Send(v interface{}) error {

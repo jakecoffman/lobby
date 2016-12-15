@@ -1,70 +1,73 @@
 package spyfall
 
 import (
-	"encoding/json"
 	"github.com/jakecoffman/lobby/lib"
-	"gopkg.in/mgo.v2/bson"
-	"log"
 )
 
-// TODO: in main call lobby Register with Spyfall instance
-
 type Spyfall struct {
-	id      string
-	players map[string]*lib.Player
+	Id         string
+	Code       string
+	Players    []*lib.Player
+	InProgress bool
 
-	join       chan *lib.Player
-	rejoin     chan *lib.Player
-	leave      chan *lib.Player
-	disconnect chan *lib.Player
-	msgs       chan *json.RawMessage
+	cmds chan *lib.PlayerCmd
 }
 
-// this is the server
-func (s *Spyfall) Run(l lib.Lobbyer) {
-	l.RunCallback(s.id, s)
-	s.players = map[string]*lib.Player{}
-	s.join = make(chan *lib.Player)
-	s.leave = make(chan *lib.Player)
-	s.disconnect = make(chan *lib.Player)
-	s.msgs = make(chan *json.RawMessage)
-	s.id = bson.NewObjectId().Hex()
+const (
+	START int = iota + 100
+	STOP
+)
+
+func (s *Spyfall) Init() {
+	s.cmds = make(chan *lib.PlayerCmd)
+	s.Players = []*lib.Player{}
+}
+
+func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 	for {
-		select {
-		case player := <-s.join:
-			s.players[player.ID] = player
-			player.GameId = s.id
-		case player := <-s.rejoin:
-			s.players[player.ID] = player
-			player.GameId = s.id
-		case player := <-s.disconnect:
-			log.Println(player, "disconnected")
-		case player := <-s.leave:
-			delete(s.players, player.ID)
-			player.GameId = ""
-		case _ = <-s.msgs:
-			//log.Println()
+		cmd := <-s.cmds
+
+		switch cmd.Type {
+		case lib.NEW:
+			fallthrough
+		case lib.JOIN:
+			s.Players = append(s.Players, cmd.Player)
+		case lib.DISCONNECT:
+
+		case lib.LEAVE:
+			for i, p := range s.Players {
+				if p.ID == cmd.Player.ID {
+					s.Players = append(s.Players[:i], s.Players[i+1:]...)
+					break
+				}
+			}
+		case START:
+
+		case STOP:
+
+		default:
+			continue
 		}
+		s.update()
 	}
 }
 
-// Everything below is the client's job to send
-func (s *Spyfall) Join(player *lib.Player) {
-	s.join <- player
+func (s *Spyfall) Send(cmd *lib.PlayerCmd) {
+	s.cmds <- cmd
 }
 
-func (s *Spyfall) Rejoin(player *lib.Player) {
-	s.rejoin <- player
+type state struct {
+	Type    string
+	Spyfall *Spyfall
 }
 
-func (s *Spyfall) Disconnect(player *lib.Player) {
-	s.disconnect <- player
+func (s *Spyfall) update() {
+	for _, p := range s.Players {
+		_ = p.Send(state{Type: "spyfall", Spyfall: s})
+		// ignoring errors because Player handles connection status
+	}
 }
 
-func (s *Spyfall) Leave(player *lib.Player) {
-	s.leave <- player
-}
-
-func (s *Spyfall) Send(data *json.RawMessage) {
-	s.msgs <- data
+func (s *Spyfall) String() string {
+	return "Spyfall: " + s.Id
 }

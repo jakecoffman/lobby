@@ -14,8 +14,8 @@ type Lobby struct {
 }
 
 type say struct {
-	Type string `json:"type"`
-	Msg  string `json:"msg"`
+	Type string
+	Msg  string
 }
 
 func (l *Lobby) Init() {
