@@ -1,31 +1,25 @@
 package lib
 
 import (
-	"encoding/json"
 	"gopkg.in/mgo.v2/bson"
 	"io"
 	"log"
 	"sync"
 )
 
-type PlayerCmd struct {
-	Type    int             `json:"type"`
-	Command json.RawMessage `json:"cmd"`
-}
-
 type Player struct {
 	sync.RWMutex
 
-	recv chan *PlayerCmd
-	done chan struct{}
+	recv       chan *PlayerCmd
+	done       chan struct{}
 
 	ID         string `bson:"_id"`
 	Name       string
 	Connected  bool
 	connection Connector
 
-	registry Registry
-	game     Game
+	registry   Registry
+	game       Game
 }
 
 func NewPlayer(registry Registry) *Player {
@@ -36,7 +30,7 @@ func (p Player) GetName() string {
 	if p.Name != "" {
 		return p.Name
 	} else {
-		return p.ID[len(p.ID)-5 : len(p.ID)]
+		return p.ID[len(p.ID) - 5 : len(p.ID)]
 	}
 }
 
@@ -54,7 +48,7 @@ func (p *Player) Run(registry Registry) {
 		log.Println(err)
 		return
 	}
-	p.game.Send(&PlayerCmd{Type: JOIN})
+	p.game.Send(&PlayerCmd{Type: JOIN, Player: p})
 
 	defer func() {
 		p.connection.Close()
@@ -79,6 +73,7 @@ func (p *Player) Run(registry Registry) {
 			return
 		// Handle messages from connection
 		case cmd = <-p.recv:
+			cmd.Player = p
 			p.handle(cmd)
 		}
 	}
@@ -86,39 +81,39 @@ func (p *Player) Run(registry Registry) {
 
 func (p *Player) handle(cmd *PlayerCmd) {
 	var err error
-	simple := &SimpleCmd{}
+	var simple string
 	switch cmd.Type {
 	case RENAME:
-		if err = json.Unmarshal(cmd.Command, &simple); err != nil {
+		if simple, err = cmd.SimpleCmd(); err != nil {
 			// TODO: send error message
 			log.Println(err)
 			return
 		}
-		p.Name = simple.Message
+		p.Name = simple
 	case NEW:
-		if err = json.Unmarshal(cmd.Command, &simple); err != nil {
+		if simple, err = cmd.SimpleCmd(); err != nil {
 			// TODO: send error message
 			log.Println(err)
 			return
 		}
-		p.game, err = p.registry.Start(simple.Message)
+		p.game, err = p.registry.Start(simple)
 		if err != nil {
 			// TODO: send error message
 			log.Println(err)
 			return
 		}
 	case JOIN:
-		if err = json.Unmarshal(cmd.Command, &simple); err != nil {
+		if simple, err = cmd.SimpleCmd(); err != nil {
 			// TODO: send error message
 			log.Println(err)
 			return
 		}
-		p.game, err = p.registry.Find(simple.Message)
+		p.game, err = p.registry.Find(simple)
 	case LEAVE:
 		// set game to default game?
 		p.game.Send(cmd)
 		p.game, _ = p.registry.Find("lobby")
-		p.game.Send(&PlayerCmd{Type: JOIN})
+		p.game.Send(&PlayerCmd{Type: JOIN, Player: p})
 		return
 	}
 	// send to game if there is one
