@@ -6,7 +6,7 @@ import (
 
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/jakecoffman/lobby"
+	"github.com/jakecoffman/lobby/games/lobby"
 	"github.com/jakecoffman/lobby/lib"
 	"golang.org/x/net/websocket"
 )
@@ -14,6 +14,17 @@ import (
 const (
 	playerId = "GAME"
 )
+
+var registry *lib.InMemoryRegistry
+
+func init() {
+	registry = lib.NewInMemoryRegistry()
+	lob := &lobby.Lobby{}
+	lob.Init()
+	registry.Register(lob, "lobby")
+	registry.Singleton(lob, "lobby")
+	go lob.Run(registry)
+}
 
 func UserHandler(ctx *gin.Context) {
 	cookie, err := ctx.Request.Cookie(playerId)
@@ -26,7 +37,7 @@ func UserHandler(ctx *gin.Context) {
 		log.Println("Database was reset?")
 		fallthrough
 	case err == http.ErrNoCookie:
-		player := lib.NewPlayer()
+		player := lib.NewPlayer(registry)
 		cookie = &http.Cookie{Name: playerId, Value: player.ID}
 		if err := lib.InsertPlayer(player); err != nil {
 			log.Println(err)
@@ -48,7 +59,7 @@ func webSocketHandler(conn *websocket.Conn) {
 	var err error
 	cookie, err := conn.Request().Cookie(playerId)
 	if err != nil {
-		player = lib.NewPlayer()
+		player = lib.NewPlayer(registry)
 		cookie = &http.Cookie{Name: playerId, Value: player.ID}
 		if err := lib.InsertPlayer(player); err != nil {
 			log.Println(err)
@@ -56,7 +67,7 @@ func webSocketHandler(conn *websocket.Conn) {
 	} else {
 		player, err = lib.FindPlayer(cookie.Value)
 		if err != nil {
-			player = lib.NewPlayer()
+			player = lib.NewPlayer(registry)
 			cookie = &http.Cookie{Name: playerId, Value: player.ID}
 			if err := lib.InsertPlayer(player); err != nil {
 				log.Println(err)
@@ -72,5 +83,5 @@ func webSocketHandler(conn *websocket.Conn) {
 		return
 	}
 
-	lobby.Lobby.Play(player)
+	player.Run(registry)
 }
