@@ -10,27 +10,30 @@ import (
 type Player struct {
 	sync.RWMutex
 
-	recv       chan *PlayerCmd
-	done       chan struct{}
+	recv chan *PlayerCmd
+	done chan struct{}
 
 	ID         string `bson:"_id"`
 	Name       string
 	Connected  bool
 	connection Connector
 
-	registry   Registry
-	game       Game
+	registry Registry
+	game     Game
 }
 
 func NewPlayer(registry Registry) *Player {
-	return &Player{ID: bson.NewObjectId().Hex(), registry: registry}
+	return &Player{
+		ID:       bson.NewObjectId().Hex(),
+		registry: registry,
+	}
 }
 
 func (p Player) GetName() string {
 	if p.Name != "" {
 		return p.Name
 	} else {
-		return p.ID[len(p.ID) - 5 : len(p.ID)]
+		return p.ID[len(p.ID)-5 : len(p.ID)]
 	}
 }
 
@@ -38,6 +41,14 @@ func (p *Player) Connect(connection Connector) {
 	p.Lock()
 	p.connection = connection
 	p.Connected = true
+	p.recv = make(chan *PlayerCmd)
+	p.done = make(chan struct{})
+	p.Unlock()
+}
+
+func (p *Player) Disconnect() {
+	p.Lock()
+	p.Connected = false
 	p.Unlock()
 }
 
@@ -52,11 +63,9 @@ func (p *Player) Run(registry Registry) {
 
 	defer func() {
 		p.connection.Close()
-		close(p.done)
-		close(p.recv)
 
 		if p.game != nil {
-			p.game.Send(&PlayerCmd{Type: DISCONNECT})
+			p.game.Send(&PlayerCmd{Type: DISCONNECT, Player: p})
 		}
 	}()
 
@@ -137,6 +146,7 @@ func (p *Player) sendLoop() {
 				log.Println(err)
 			}
 			close(p.done)
+			p.Disconnect()
 			return
 		}
 		select {

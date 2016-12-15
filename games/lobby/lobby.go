@@ -3,7 +3,6 @@ package lobby
 import (
 	"fmt"
 	"github.com/jakecoffman/lobby/lib"
-	"io"
 	"log"
 )
 
@@ -54,10 +53,7 @@ func (l *Lobby) Send(cmd *lib.PlayerCmd) {
 
 func (l *Lobby) broadcast(msg string) {
 	for _, p := range l.players {
-		if err := p.Send(&say{Type: "say", Msg: msg}); err != nil {
-			if err != io.EOF {
-				log.Println(err)
-			}
-		}
+		_ = p.Send(&say{Type: "say", Msg: msg})
+		// ignoring errors because Player handles connection status
 	}
 }
