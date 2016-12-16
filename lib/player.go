@@ -53,14 +53,6 @@ func (p *Player) Disconnect() {
 }
 
 func (p *Player) Run(registry Registry) {
-	var err error
-	p.game, err = registry.Find("lobby")
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	p.game.Send(&PlayerCmd{Type: JOIN, Player: p})
-
 	defer func() {
 		p.connection.Close()
 
@@ -112,6 +104,15 @@ func (p *Player) handle(cmd *PlayerCmd) {
 			return
 		}
 		log.Println("Player", p.GetName(), "started game", p.game)
+	case FIND:
+		if simple, err = cmd.SimpleCmd(); err != nil {
+			// TODO: send error message
+			log.Println(err)
+			return
+		}
+		var game Game
+		game, err = p.registry.Find(simple)
+		p.Send(struct{ Type, Goto string }{"goto", game.Location()})
 	case JOIN:
 		if simple, err = cmd.SimpleCmd(); err != nil {
 			// TODO: send error message

@@ -57,3 +57,7 @@ func (l *Lobby) broadcast(msg string) {
 		// ignoring errors because Player handles connection status
 	}
 }
+
+func (l *Lobby) Location() string {
+	return "location"
+}

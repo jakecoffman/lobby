@@ -79,8 +79,8 @@ func webSocketHandler(conn *websocket.Conn) {
 	}
 	player.Connect(&lib.WsConn{Conn: conn}, registry)
 	if err = player.Send(map[string]string{
-		"type":   "cookie",
-		"cookie": fmt.Sprintf("%s=%s; path=/;", playerId, player.ID),
+		"Type":   "cookie",
+		"Cookie": fmt.Sprintf("%s=%s; path=/;", playerId, player.ID),
 	}); err != nil {
 		log.Println("Player didn't get updated cookie", err)
 		return

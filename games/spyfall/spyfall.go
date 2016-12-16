@@ -2,6 +2,7 @@ package spyfall
 
 import (
 	"github.com/jakecoffman/lobby/lib"
+	"gopkg.in/mgo.v2/bson"
 )
 
 type Spyfall struct {
@@ -19,6 +20,8 @@ const (
 )
 
 func (s *Spyfall) Init() {
+	s.Id = bson.NewObjectId().Hex()
+	s.Code = "1234567"
 	s.cmds = make(chan *lib.PlayerCmd)
 	s.Players = []*lib.Player{}
 }
@@ -70,4 +73,8 @@ func (s *Spyfall) update() {
 
 func (s *Spyfall) String() string {
 	return "Spyfall: " + s.Id
+}
+
+func (s *Spyfall) Location() string {
+	return "spyfall/" + s.Id
 }

@@ -6,6 +6,7 @@ const (
 	SAY int = iota
 	RENAME
 	NEW
+	FIND
 	JOIN
 	LEAVE
 	CONNECT
