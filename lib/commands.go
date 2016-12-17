@@ -1,6 +1,8 @@
 package lib
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 const (
 	SAY int = iota
@@ -17,8 +19,8 @@ type PlayerCmd struct {
 	Type int
 	Cmd  json.RawMessage
 
-	Player *Player `json:"-"`
-	simple string  `json:"-"`
+	Player *User  `json:"-"`
+	simple string `json:"-"`
 }
 
 func (p *PlayerCmd) SimpleCmd() (string, error) {

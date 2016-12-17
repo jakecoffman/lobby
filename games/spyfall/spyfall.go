@@ -1,14 +1,32 @@
 package spyfall
 
 import (
+	"github.com/gin-gonic/gin"
 	"github.com/jakecoffman/lobby/lib"
+	"github.com/jakecoffman/lobby/server"
+	"golang.org/x/net/websocket"
+	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
+
+var db *mgo.Database
+
+func Install(router *gin.Engine, db *mgo.Database) {
+	db = db
+	router.GET("/spyfall", func(ctx *gin.Context) {
+		websocket.Handler(func(conn *websocket.Conn) {
+			_, err := server.Connect(conn)
+			if err != nil {
+				return
+			}
+		}).ServeHTTP(ctx.Writer, ctx.Request)
+	})
+}
 
 type Spyfall struct {
 	Id         string
 	Code       string
-	Players    []*lib.Player
+	Players    []*lib.User
 	InProgress bool
 
 	cmds chan *lib.PlayerCmd
@@ -23,7 +41,7 @@ func (s *Spyfall) Init() {
 	s.Id = bson.NewObjectId().Hex()
 	s.Code = "1234567"
 	s.cmds = make(chan *lib.PlayerCmd)
-	s.Players = []*lib.Player{}
+	s.Players = []*lib.User{}
 }
 
 func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {

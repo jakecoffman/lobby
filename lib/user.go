@@ -1,42 +1,61 @@
 package lib
 
 import (
+	"github.com/jakecoffman/gorest"
 	"gopkg.in/mgo.v2/bson"
 	"io"
 	"log"
 	"sync"
 )
 
-type Player struct {
-	sync.RWMutex
+const (
+	USER = "users"
+)
 
-	recv chan *PlayerCmd
-	done chan struct{}
+type User struct {
+	sync.RWMutex `bson:"-",json:"-"`
 
-	ID         string `bson:"_id"`
-	Name       string
-	Connected  bool
+	// These can only be changed from REST API
+	ID        bson.ObjectId `bson:"_id"`
+	Name      string
+	IsDeleted bool
+
+	// These are for during games when a player does stuff.
+	registry   Registry
 	connection Connector
+	game       Game
+	recv       chan *PlayerCmd
+	done       chan struct{}
 
-	registry Registry
-	game     Game
+	Connected bool
 }
 
-func NewPlayer() *Player {
-	return &Player{
-		ID: bson.NewObjectId().Hex(),
-	}
+func (u *User) New() gorest.Resource {
+	return &User{}
 }
 
-func (p Player) GetName() string {
-	if p.Name != "" {
-		return p.Name
+func (u *User) NewList() interface{} {
+	return &[]User{}
+}
+
+func (u *User) Id(id string) {
+	u.ID = bson.ObjectIdHex(id)
+}
+
+func (u *User) Valid() bool {
+	return string(u.ID) != ""
+}
+
+func (u User) GetName() string {
+	if u.Name != "" {
+		return u.Name
 	} else {
-		return p.ID[len(p.ID)-5 : len(p.ID)]
+		id := u.ID.Hex()
+		return id[len(id)-5:]
 	}
 }
 
-func (p *Player) Connect(connection Connector, registry Registry) {
+func (p *User) Connect(connection Connector, registry Registry) {
 	p.Lock()
 	p.registry = registry
 	p.connection = connection
@@ -46,15 +65,24 @@ func (p *Player) Connect(connection Connector, registry Registry) {
 	p.Unlock()
 }
 
-func (p *Player) Disconnect() {
-	p.Lock()
-	p.Connected = false
-	p.Unlock()
+func (u *User) Disconnect() {
+	u.Lock()
+	u.Connected = false
+	u.connection.Close()
+	u.Unlock()
 }
 
-func (p *Player) Run(registry Registry) {
+func (u *User) Send(v interface{}) error {
+	return u.connection.Send(v)
+}
+
+func (u *User) receive(v interface{}) error {
+	return u.connection.Recv(v)
+}
+
+func (p *User) Run(registry Registry) {
 	defer func() {
-		p.connection.Close()
+		p.Disconnect()
 
 		if p.game != nil {
 			p.game.Send(&PlayerCmd{Type: DISCONNECT, Player: p})
@@ -80,7 +108,7 @@ func (p *Player) Run(registry Registry) {
 	}
 }
 
-func (p *Player) handle(cmd *PlayerCmd) {
+func (p *User) handle(cmd *PlayerCmd) {
 	var err error
 	var simple string
 	switch cmd.Type {
@@ -133,15 +161,7 @@ func (p *Player) handle(cmd *PlayerCmd) {
 	}
 }
 
-func (p *Player) Send(v interface{}) error {
-	return p.connection.Send(v)
-}
-
-func (p *Player) receive(v interface{}) error {
-	return p.connection.Recv(v)
-}
-
-func (p *Player) sendLoop() {
+func (p *User) sendLoop() {
 	var err error
 	incoming := &PlayerCmd{}
 	for {
@@ -159,4 +179,18 @@ func (p *Player) sendLoop() {
 			return
 		}
 	}
+}
+
+func NewUser() *User {
+	return &User{ID: bson.NewObjectId()}
+}
+
+func FindUser(id string) (*User, error) {
+	user := &User{}
+	err := DB.C(USER).FindId(id).One(user)
+	return user, err
+}
+
+func InsertUser(user *User) error {
+	return DB.C(USER).Insert(user)
 }

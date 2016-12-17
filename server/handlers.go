@@ -6,43 +6,30 @@ import (
 
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/jakecoffman/lobby/games/lobby"
-	"github.com/jakecoffman/lobby/games/spyfall"
 	"github.com/jakecoffman/lobby/lib"
 	"golang.org/x/net/websocket"
 )
 
 const (
-	playerId = "GAME"
+	GAMECOOKIE = "GAME"
 )
 
 var registry *lib.InMemoryRegistry
 
-func init() {
-	registry = lib.NewInMemoryRegistry()
-	lob := &lobby.Lobby{}
-	lob.Init()
-	registry.Register(lob, "lobby")
-	registry.Singleton(lob, "lobby")
-	go lob.Run(registry)
-
-	registry.Register(&spyfall.Spyfall{}, "spyfall")
-}
-
-func UserHandler(ctx *gin.Context) {
-	cookie, err := ctx.Request.Cookie(playerId)
+func UserMiddleware(ctx *gin.Context) {
+	cookie, err := ctx.Request.Cookie(GAMECOOKIE)
 	switch {
 	case err == nil:
-		if _, err := lib.FindPlayer(cookie.Value); err == nil {
+		if _, err := lib.FindUser(cookie.Value); err == nil {
 			// good, we have a cookie and a player
 			return
 		}
 		log.Println("Database was reset?")
 		fallthrough
 	case err == http.ErrNoCookie:
-		player := lib.NewPlayer()
-		cookie = &http.Cookie{Name: playerId, Value: player.ID}
-		if err := lib.InsertPlayer(player); err != nil {
+		user := &lib.User{}
+		cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID.Hex()}
+		if err := lib.InsertUser(user); err != nil {
 			log.Println(err)
 		}
 		http.SetCookie(ctx.Writer, cookie)
@@ -53,38 +40,37 @@ func UserHandler(ctx *gin.Context) {
 	}
 }
 
-func WebSocketHandler(ctx *gin.Context) {
-	websocket.Handler(webSocketHandler).ServeHTTP(ctx.Writer, ctx.Request)
-}
-
-func webSocketHandler(conn *websocket.Conn) {
-	var player *lib.Player
+// for games to use to allow anonymous users to connect
+func Connect(conn *websocket.Conn) (*lib.User, error) {
+	var user *lib.User
 	var err error
-	cookie, err := conn.Request().Cookie(playerId)
+	cookie, err := conn.Request().Cookie(GAMECOOKIE)
 	if err != nil {
-		player = lib.NewPlayer()
-		cookie = &http.Cookie{Name: playerId, Value: player.ID}
-		if err := lib.InsertPlayer(player); err != nil {
+		user = lib.NewUser()
+		cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID.Hex()}
+		if err := lib.InsertUser(user); err != nil {
 			log.Println(err)
+			return nil, err
 		}
 	} else {
-		player, err = lib.FindPlayer(cookie.Value)
+		user, err = lib.FindUser(cookie.Value)
 		if err != nil {
-			player = lib.NewPlayer()
-			cookie = &http.Cookie{Name: playerId, Value: player.ID}
-			if err := lib.InsertPlayer(player); err != nil {
+			user = lib.NewUser()
+			cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID.Hex()}
+			if err := lib.InsertUser(user); err != nil {
 				log.Println(err)
+				return nil, err
 			}
 		}
 	}
-	player.Connect(&lib.WsConn{Conn: conn}, registry)
-	if err = player.Send(map[string]string{
+	user.Connect(&lib.WsConn{Conn: conn}, registry)
+	if err = user.Send(map[string]string{
 		"Type":   "cookie",
-		"Cookie": fmt.Sprintf("%s=%s; path=/;", playerId, player.ID),
+		"Cookie": fmt.Sprintf("%s=%s; path=/;", GAMECOOKIE, user.ID.Hex()),
 	}); err != nil {
 		log.Println("Player didn't get updated cookie", err)
-		return
+		return nil, err
 	}
 
-	player.Run(registry)
+	return user, nil
 }
