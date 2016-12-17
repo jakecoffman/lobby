@@ -24,7 +24,8 @@ func main() {
 
 	r := route(lib.DB)
 
-	spyfall.Install(r, lib.DB)
+	registry := lib.NewInMemoryRegistry()
+	spyfall.Install(r, lib.DB, registry)
 
 	r.GET("/debug/pprof/", func(ctx *gin.Context) {
 		pprof.Index(ctx.Writer, ctx.Request)

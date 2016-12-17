@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/json"
 	"github.com/jakecoffman/gorest"
 	"gopkg.in/mgo.v2/bson"
 	"io"
@@ -24,8 +25,8 @@ type User struct {
 	registry   Registry
 	connection Connector
 	game       Game
-	recv       chan *PlayerCmd
-	done       chan struct{}
+	Recv       chan *PlayerCmd `bson:"-",json:"-"`
+	Done       chan struct{}   `bson:"-",json:"-"`
 
 	Connected bool
 }
@@ -59,8 +60,8 @@ func (p *User) Connect(connection Connector, registry Registry) {
 	p.registry = registry
 	p.connection = connection
 	p.Connected = true
-	p.recv = make(chan *PlayerCmd)
-	p.done = make(chan struct{})
+	p.Recv = make(chan *PlayerCmd)
+	p.Done = make(chan struct{})
 	p.Unlock()
 }
 
@@ -88,6 +89,8 @@ func (p *User) Run(registry Registry) {
 		}
 	}()
 
+	p.registry = registry
+
 	// Process incoming messages with a channel since it blocks
 	go p.sendLoop()
 
@@ -97,10 +100,10 @@ func (p *User) Run(registry Registry) {
 	for {
 		select {
 		// Server or the receive channel has signalled a disconnect
-		case <-p.done:
+		case <-p.Done:
 			return
 		// Handle messages from connection
-		case cmd = <-p.recv:
+		case cmd = <-p.Recv:
 			cmd.Player = p
 			p.handle(cmd)
 		}
@@ -168,13 +171,13 @@ func (p *User) sendLoop() {
 			if err != io.EOF {
 				log.Println(err)
 			}
-			close(p.done)
+			close(p.Done)
 			p.Disconnect()
 			return
 		}
 		select {
-		case p.recv <- incoming:
-		case <-p.done:
+		case p.Recv <- incoming:
+		case <-p.Done:
 			return
 		}
 	}
@@ -192,4 +195,16 @@ func FindUser(id string) (*User, error) {
 
 func InsertUser(user *User) error {
 	return DB.C(USER).Insert(user)
+}
+
+func (u *User) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		ID        string
+		Name      string
+		IsDeleted bool
+	}{
+		u.ID,
+		u.Name,
+		u.IsDeleted,
+	})
 }
