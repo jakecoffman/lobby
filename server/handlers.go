@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/jakecoffman/lobby/lib"
@@ -54,6 +55,9 @@ func Connect(conn *websocket.Conn) (*lib.User, error) {
 			log.Println(err)
 			return nil, err
 		}
+		if err = sendCookie(user); err != nil {
+			return nil, err
+		}
 	} else {
 		user, err = lib.FindUser(cookie.Value)
 		if err != nil {
@@ -63,16 +67,22 @@ func Connect(conn *websocket.Conn) (*lib.User, error) {
 				log.Println(err)
 				return nil, err
 			}
+			if err = sendCookie(user); err != nil {
+				return nil, err
+			}
 		}
 	}
 	user.Connect(&lib.WsConn{Conn: conn}, registry)
-	if err = user.Send(map[string]string{
+
+	return user, nil
+}
+
+func sendCookie(user *lib.User) error {
+	if err := user.Send(map[string]string{
 		"Type":   "cookie",
 		"Cookie": fmt.Sprintf("%s=%s; path=/;", GAMECOOKIE, user.ID),
 	}); err != nil {
-		log.Println("Player didn't get updated cookie", err)
-		return nil, err
+		return errors.New(fmt.Sprintln("Trouble sending updated cookie", err))
 	}
-
-	return user, nil
+	return nil
 }

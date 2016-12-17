@@ -7,6 +7,8 @@ import (
 	"golang.org/x/net/websocket"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
+	"log"
+	"time"
 )
 
 var db *mgo.Database
@@ -17,7 +19,11 @@ func Install(router *gin.Engine, db *mgo.Database) {
 		websocket.Handler(func(conn *websocket.Conn) {
 			_, err := server.Connect(conn)
 			if err != nil {
+				log.Println(err)
 				return
+			}
+			for {
+				time.Sleep(5 * time.Second)
 			}
 		}).ServeHTTP(ctx.Writer, ctx.Request)
 	})
