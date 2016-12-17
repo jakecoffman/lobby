@@ -16,7 +16,7 @@ type User struct {
 	sync.RWMutex `bson:"-",json:"-"`
 
 	// These can only be changed from REST API
-	ID        bson.ObjectId `bson:"_id"`
+	ID        string `bson:"_id"`
 	Name      string
 	IsDeleted bool
 
@@ -39,7 +39,7 @@ func (u *User) NewList() interface{} {
 }
 
 func (u *User) Id(id string) {
-	u.ID = bson.ObjectIdHex(id)
+	u.ID = id
 }
 
 func (u *User) Valid() bool {
@@ -50,8 +50,7 @@ func (u User) GetName() string {
 	if u.Name != "" {
 		return u.Name
 	} else {
-		id := u.ID.Hex()
-		return id[len(id)-5:]
+		return u.ID[len(u.ID)-5:]
 	}
 }
 
@@ -182,7 +181,7 @@ func (p *User) sendLoop() {
 }
 
 func NewUser() *User {
-	return &User{ID: bson.NewObjectId()}
+	return &User{ID: bson.NewObjectId().Hex()}
 }
 
 func FindUser(id string) (*User, error) {

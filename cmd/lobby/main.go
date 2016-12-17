@@ -2,15 +2,12 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/jakecoffman/gorest"
 	"github.com/jakecoffman/lobby/games/spyfall"
 	"github.com/jakecoffman/lobby/lib"
 	"github.com/jakecoffman/lobby/server"
 	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 	"log"
 	"net/http/pprof"
-	"time"
 )
 
 func main() {
@@ -39,27 +36,15 @@ func main() {
 }
 
 func bootstrap() {
-	id := bson.NewObjectIdWithTime(time.Time{})
-	lib.InsertUser(&lib.User{ID: id, Name: "admin"})
+	lib.InsertUser(&lib.User{ID: "admin", Name: "admin"})
 }
 
 func route(db *mgo.Database) *gin.Engine {
 	router := gin.Default()
 	router.Use(server.UserMiddleware)
-	userRoute := router.Group("/users")
-	{
-		controller := server.UserController{
-			MongoController: gorest.MongoController{
-				C:        db.C(lib.USER),
-				Resource: &lib.User{},
-			},
-		}
-		userRoute.GET("/", controller.List)
-		userRoute.GET("/:id", controller.Get)
-
-		userRoute.POST("/", controller.Create)
-		userRoute.PUT("/:id", controller.Update)
-		userRoute.DELETE("/:id", controller.Delete)
-	}
+	router.GET("/me", func(ctx *gin.Context) {
+		user := ctx.MustGet("player").(*lib.User)
+		ctx.JSON(200, user)
+	})
 	return router
 }

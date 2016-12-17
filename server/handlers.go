@@ -20,19 +20,21 @@ func UserMiddleware(ctx *gin.Context) {
 	cookie, err := ctx.Request.Cookie(GAMECOOKIE)
 	switch {
 	case err == nil:
-		if _, err := lib.FindUser(cookie.Value); err == nil {
-			// good, we have a cookie and a player
+		// TODO: insecure, just finding user by their ID. need proper login cookie ID maker
+		if p, err := lib.FindUser(cookie.Value); err == nil {
+			ctx.Set("player", p)
 			return
 		}
-		log.Println("Database was reset?")
+		log.Println("Found cookie but couldn't find player", cookie.Value)
 		fallthrough
 	case err == http.ErrNoCookie:
-		user := &lib.User{}
-		cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID.Hex()}
+		user := lib.NewUser()
+		cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID}
 		if err := lib.InsertUser(user); err != nil {
 			log.Println(err)
 		}
 		http.SetCookie(ctx.Writer, cookie)
+		ctx.Set("player", user)
 	default:
 		log.Println(err)
 		ctx.AbortWithStatus(400)
@@ -47,7 +49,7 @@ func Connect(conn *websocket.Conn) (*lib.User, error) {
 	cookie, err := conn.Request().Cookie(GAMECOOKIE)
 	if err != nil {
 		user = lib.NewUser()
-		cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID.Hex()}
+		cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID}
 		if err := lib.InsertUser(user); err != nil {
 			log.Println(err)
 			return nil, err
@@ -56,7 +58,7 @@ func Connect(conn *websocket.Conn) (*lib.User, error) {
 		user, err = lib.FindUser(cookie.Value)
 		if err != nil {
 			user = lib.NewUser()
-			cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID.Hex()}
+			cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID}
 			if err := lib.InsertUser(user); err != nil {
 				log.Println(err)
 				return nil, err
@@ -66,7 +68,7 @@ func Connect(conn *websocket.Conn) (*lib.User, error) {
 	user.Connect(&lib.WsConn{Conn: conn}, registry)
 	if err = user.Send(map[string]string{
 		"Type":   "cookie",
-		"Cookie": fmt.Sprintf("%s=%s; path=/;", GAMECOOKIE, user.ID.Hex()),
+		"Cookie": fmt.Sprintf("%s=%s; path=/;", GAMECOOKIE, user.ID),
 	}); err != nil {
 		log.Println("Player didn't get updated cookie", err)
 		return nil, err
