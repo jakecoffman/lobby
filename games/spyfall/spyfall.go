@@ -16,22 +16,12 @@ func Install(router *gin.Engine, db *mgo.Database, registry *lib.InMemoryRegistr
 	registry.Register(&Spyfall{}, "spyfall")
 	router.GET("/spyfall", func(ctx *gin.Context) {
 		websocket.Handler(func(conn *websocket.Conn) {
-			user, err := server.Connect(conn)
+			user, err := server.WSMiddleware(conn)
 			if err != nil {
 				log.Println(err)
 				return
 			}
 
-			var game *Spyfall
-
-			defer func() {
-				user.Disconnect()
-				if game != nil {
-					game.cmds <- &lib.PlayerCmd{Type: lib.DISCONNECT, Player: user}
-				}
-			}()
-
-			// Process incoming messages with a channel since it blocks
 			user.Run(registry)
 		}).ServeHTTP(ctx.Writer, ctx.Request)
 	})
@@ -72,22 +62,20 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 			s.Players = append(s.Players, cmd.Player)
 		case lib.JOIN:
 			// check if this is a rejoin
-			var found *lib.User
-			for _, p := range s.Players {
+			found := false
+			for i, p := range s.Players {
 				if p.ID == cmd.Player.ID {
-					found = p
+					found = true
+					s.Players[i] = cmd.Player
 					break
 				}
 			}
-			if found != nil {
-				*found = *cmd.Player
-			} else {
+			if !found {
 				s.Players = append(s.Players, cmd.Player)
 			}
 		case lib.DISCONNECT:
 
 		case lib.LEAVE:
-			log.Println("LEAVING")
 			for i, p := range s.Players {
 				if p.ID == cmd.Player.ID {
 					s.Players = append(s.Players[:i], s.Players[i+1:]...)
@@ -101,7 +89,6 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 		default:
 			continue
 		}
-		log.Println("Sending update", len(s.Players))
 		s.update()
 	}
 }

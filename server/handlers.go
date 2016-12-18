@@ -44,7 +44,7 @@ func UserMiddleware(ctx *gin.Context) {
 }
 
 // for games to use to allow anonymous users to connect
-func Connect(conn *websocket.Conn) (*lib.User, error) {
+func WSMiddleware(conn *websocket.Conn) (*lib.User, error) {
 	var user *lib.User
 	var err error
 	cookie, err := conn.Request().Cookie(GAMECOOKIE)
