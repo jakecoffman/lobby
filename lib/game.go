@@ -1,7 +1,8 @@
 package lib
 
 type Game interface {
-	Init()
+	Init(string, string)
+	ID() string
 	Run(*InMemoryRegistry)
 	Send(*PlayerCmd)
 	Location() string

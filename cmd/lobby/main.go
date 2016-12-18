@@ -37,6 +37,7 @@ func main() {
 }
 
 func bootstrap() {
+	lib.DB.DropDatabase()
 	lib.InsertUser(&lib.User{ID: "admin", Name: "admin"})
 }
 

@@ -48,7 +48,6 @@ func Connect(conn *websocket.Conn) (*lib.User, error) {
 	var user *lib.User
 	var err error
 	cookie, err := conn.Request().Cookie(GAMECOOKIE)
-	log.Println("Cookie is", cookie)
 	if err != nil {
 		user = lib.NewUser()
 		cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID}

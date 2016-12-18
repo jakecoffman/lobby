@@ -6,7 +6,6 @@ import (
 	"github.com/jakecoffman/lobby/server"
 	"golang.org/x/net/websocket"
 	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 	"log"
 )
 
@@ -52,11 +51,16 @@ const (
 	STOP
 )
 
-func (s *Spyfall) Init() {
-	s.Id = bson.NewObjectId().Hex()
-	s.Code = "1234567"
+func (s *Spyfall) Init(id, code string) {
+	s.Id = id
+	s.Code = code
 	s.cmds = make(chan *lib.PlayerCmd)
 	s.Players = []*lib.User{}
+	log.Println("New game initialized", s)
+}
+
+func (s *Spyfall) ID() string {
+	return s.Id
 }
 
 func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {

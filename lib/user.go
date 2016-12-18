@@ -112,6 +112,7 @@ func (p *User) Run(registry Registry) {
 func (p *User) handle(cmd *PlayerCmd) {
 	var err error
 	var simple string
+	log.Println(cmd.Type, string(cmd.Cmd))
 	switch cmd.Type {
 	case RENAME:
 		if simple, err = cmd.SimpleCmd(); err != nil {
@@ -133,7 +134,7 @@ func (p *User) handle(cmd *PlayerCmd) {
 			return
 		}
 		log.Println("Player", p.GetName(), "started game", p.game)
-	case FIND:
+	case FIND: // for finding game & game ID by code or game id
 		if simple, err = cmd.SimpleCmd(); err != nil {
 			// TODO: send error message
 			log.Println(err)
@@ -141,14 +142,23 @@ func (p *User) handle(cmd *PlayerCmd) {
 		}
 		var game Game
 		game, err = p.registry.Find(simple)
+		if err != nil {
+			log.Println(err)
+			// TODO: tell player game was not found
+			return
+		}
 		p.Send(struct{ Type, Goto string }{"goto", game.Location()})
-	case JOIN:
+	case JOIN: // for joining (by ID or code)
 		if simple, err = cmd.SimpleCmd(); err != nil {
 			// TODO: send error message
 			log.Println(err)
 			return
 		}
+		log.Println(simple)
 		p.game, err = p.registry.Find(simple)
+		if err != nil {
+			log.Println(err)
+		}
 	case LEAVE:
 		// set game to default game?
 		p.game.Send(cmd)

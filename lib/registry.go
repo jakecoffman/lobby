@@ -2,6 +2,7 @@ package lib
 
 import (
 	"errors"
+	"gopkg.in/mgo.v2/bson"
 	"reflect"
 	"sync"
 )
@@ -15,14 +16,16 @@ type Registry interface {
 type InMemoryRegistry struct {
 	sync.RWMutex
 	games   map[string]reflect.Type
-	gips    map[string]Game // code -> game
-	players map[string]Game // player -> game
+	gips    map[string]Game   // code -> game
+	lookup  map[string]string // id -> code
+	players map[string]Game   // player -> game
 }
 
 func NewInMemoryRegistry() *InMemoryRegistry {
 	return &InMemoryRegistry{
 		games:   map[string]reflect.Type{},
 		gips:    map[string]Game{},
+		lookup:  map[string]string{},
 		players: map[string]Game{},
 	}
 }
@@ -49,21 +52,29 @@ func (r *InMemoryRegistry) Start(name string) (Game, error) {
 		r.Lock()
 		defer r.Unlock()
 		game := reflect.New(gameType).Interface().(Game)
-		game.Init()
 		// TODO: create 7 digit code users can join each-others games off of
+		id := bson.NewObjectId().Hex()
 		code := "1"
+		game.Init(id, code)
 		r.gips[code] = game
+		r.lookup[id] = code
 		go game.Run(r)
 		return game, nil
 	}
 }
 
-func (r *InMemoryRegistry) Find(code string) (Game, error) {
+func (r *InMemoryRegistry) Find(codeOrId string) (Game, error) {
 	r.RLock()
-	game, ok := r.gips[code]
+	var game Game
+	code, ok := r.lookup[codeOrId]
+	if !ok {
+		game, ok = r.gips[codeOrId]
+	} else {
+		game, ok = r.gips[code]
+	}
 	r.RUnlock()
 	if !ok {
-		return nil, errors.New("Game not found")
+		return nil, errors.New("Game not found:" + codeOrId)
 	}
 	return game, nil
 }
