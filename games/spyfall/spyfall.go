@@ -71,18 +71,23 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 		case lib.NEW:
 			s.Players = append(s.Players, cmd.Player)
 		case lib.JOIN:
-			log.Println("Player JOIN", cmd.Player.ID)
 			// check if this is a rejoin
+			var found *lib.User
 			for _, p := range s.Players {
 				if p.ID == cmd.Player.ID {
-					// ok
+					found = p
 					break
 				}
 			}
-			s.Players = append(s.Players, cmd.Player)
+			if found != nil {
+				*found = *cmd.Player
+			} else {
+				s.Players = append(s.Players, cmd.Player)
+			}
 		case lib.DISCONNECT:
 
 		case lib.LEAVE:
+			log.Println("LEAVING")
 			for i, p := range s.Players {
 				if p.ID == cmd.Player.ID {
 					s.Players = append(s.Players[:i], s.Players[i+1:]...)
@@ -96,6 +101,7 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 		default:
 			continue
 		}
+		log.Println("Sending update", len(s.Players))
 		s.update()
 	}
 }

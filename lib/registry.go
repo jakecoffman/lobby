@@ -3,6 +3,7 @@ package lib
 import (
 	"errors"
 	"gopkg.in/mgo.v2/bson"
+	"log"
 	"reflect"
 	"sync"
 )
@@ -15,18 +16,16 @@ type Registry interface {
 
 type InMemoryRegistry struct {
 	sync.RWMutex
-	games   map[string]reflect.Type
-	gips    map[string]Game   // code -> game
-	lookup  map[string]string // id -> code
-	players map[string]Game   // player -> game
+	games  map[string]reflect.Type
+	gips   map[string]Game   // code -> game
+	lookup map[string]string // id -> code
 }
 
 func NewInMemoryRegistry() *InMemoryRegistry {
 	return &InMemoryRegistry{
-		games:   map[string]reflect.Type{},
-		gips:    map[string]Game{},
-		lookup:  map[string]string{},
-		players: map[string]Game{},
+		games:  map[string]reflect.Type{},
+		gips:   map[string]Game{},
+		lookup: map[string]string{},
 	}
 }
 
@@ -58,6 +57,7 @@ func (r *InMemoryRegistry) Start(name string) (Game, error) {
 		game.Init(id, code)
 		r.gips[code] = game
 		r.lookup[id] = code
+		log.Println("Starting game", name, code, id)
 		go game.Run(r)
 		return game, nil
 	}

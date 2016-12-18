@@ -154,7 +154,6 @@ func (p *User) handle(cmd *PlayerCmd) {
 			log.Println(err)
 			return
 		}
-		log.Println(simple)
 		p.game, err = p.registry.Find(simple)
 		if err != nil {
 			log.Println(err)
