@@ -17,9 +17,8 @@ type User struct {
 	sync.RWMutex `bson:"-",json:"-"`
 
 	// These can only be changed from REST API
-	ID        string `bson:"_id"`
-	Name      string
-	IsDeleted bool
+	ID   string `bson:"_id"`
+	Name string
 
 	// These are for during games when a player does stuff.
 	registry   Registry
@@ -201,10 +200,10 @@ func (u *User) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		ID        string
 		Name      string
-		IsDeleted bool
+		Connected bool
 	}{
 		u.ID,
 		u.Name,
-		u.IsDeleted,
+		u.Connected,
 	})
 }

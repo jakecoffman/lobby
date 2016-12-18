@@ -48,6 +48,7 @@ func Connect(conn *websocket.Conn) (*lib.User, error) {
 	var user *lib.User
 	var err error
 	cookie, err := conn.Request().Cookie(GAMECOOKIE)
+	log.Println("Cookie is", cookie)
 	if err != nil {
 		user = lib.NewUser()
 		cookie = &http.Cookie{Name: GAMECOOKIE, Value: user.ID}
@@ -55,6 +56,7 @@ func Connect(conn *websocket.Conn) (*lib.User, error) {
 			log.Println(err)
 			return nil, err
 		}
+		user.Connect(&lib.WsConn{Conn: conn}, registry)
 		if err = sendCookie(user); err != nil {
 			return nil, err
 		}
@@ -67,12 +69,14 @@ func Connect(conn *websocket.Conn) (*lib.User, error) {
 				log.Println(err)
 				return nil, err
 			}
+			user.Connect(&lib.WsConn{Conn: conn}, registry)
 			if err = sendCookie(user); err != nil {
 				return nil, err
 			}
+		} else {
+			user.Connect(&lib.WsConn{Conn: conn}, registry)
 		}
 	}
-	user.Connect(&lib.WsConn{Conn: conn}, registry)
 
 	return user, nil
 }
