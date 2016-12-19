@@ -4,9 +4,16 @@ import (
 	"errors"
 	"gopkg.in/mgo.v2/bson"
 	"log"
+	"math/rand"
 	"reflect"
+	"strings"
 	"sync"
+	"time"
 )
+
+func init() {
+	rand.Seed(time.Now().Unix())
+}
 
 type Registry interface {
 	Register(Game, string)
@@ -53,7 +60,7 @@ func (r *InMemoryRegistry) Start(name string) (Game, error) {
 		game := reflect.New(gameType).Interface().(Game)
 		// TODO: create 7 digit code users can join each-others games off of
 		id := bson.NewObjectId().Hex()
-		code := "1"
+		code := gen(7)
 		game.Init(id, code)
 		r.gips[code] = game
 		r.lookup[id] = code
@@ -79,6 +86,13 @@ func (r *InMemoryRegistry) Find(codeOrId string) (Game, error) {
 	return game, nil
 }
 
-func gen() {
-
+// with size = 7, there are 4,294,967,296 possibilities
+func gen(size int) string {
+	// 32 chars
+	chars := strings.Split("23456789abcdefghijkmnpqrstuvwxyz", "") // no 0, o, 1, l
+	code := ""
+	for i := 0; i < size; i++ {
+		code += chars[rand.Intn(len(chars))]
+	}
+	return code
 }

@@ -4,19 +4,8 @@ import (
 	"encoding/json"
 )
 
-const (
-	SAY int = iota
-	RENAME
-	NEW
-	FIND
-	JOIN
-	LEAVE
-	CONNECT
-	DISCONNECT
-)
-
 type PlayerCmd struct {
-	Type int
+	Type string
 	Cmd  json.RawMessage
 
 	Player *User  `json:"-"`
@@ -37,4 +26,9 @@ func (p *PlayerCmd) SimpleCmd() (string, error) {
 
 type SimpleCmd struct {
 	Msg string
+}
+
+type SimpleMsg struct {
+	Type string
+	Msg  string
 }

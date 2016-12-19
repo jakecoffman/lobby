@@ -30,27 +30,22 @@ func Install(router *gin.Engine, db *mgo.Database, registry *lib.InMemoryRegistr
 type Spyfall struct {
 	Id         string
 	Code       string
-	Players    []*lib.User
+	Players    []*Player
 	InProgress bool
 
 	cmds chan *lib.PlayerCmd
 }
 
 type Player struct {
-	lib.User
+	*lib.User
 	Ready bool
 }
-
-const (
-	START int = iota + 100
-	STOP
-)
 
 func (s *Spyfall) Init(id, code string) {
 	s.Id = id
 	s.Code = code
 	s.cmds = make(chan *lib.PlayerCmd)
-	s.Players = []*lib.User{}
+	s.Players = []*Player{}
 	log.Println("New game initialized", s)
 }
 
@@ -63,33 +58,31 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 		cmd := <-s.cmds
 
 		switch cmd.Type {
-		case lib.NEW:
-			s.Players = append(s.Players, cmd.Player)
-		case lib.JOIN:
+		case "NEW":
+			s.Players = append(s.Players, &Player{User: cmd.Player})
+		case "JOIN":
 			// check if this is a rejoin
 			found := false
 			for i, p := range s.Players {
 				if p.ID == cmd.Player.ID {
 					found = true
-					s.Players[i] = cmd.Player
+					s.Players[i].User = cmd.Player
 					break
 				}
 			}
 			if !found {
-				s.Players = append(s.Players, cmd.Player)
+				s.Players = append(s.Players, &Player{User: cmd.Player})
 			}
-		case lib.DISCONNECT:
+		case "DISCONNECT":
 
-		case lib.LEAVE:
+		case "LEAVE":
 			for i, p := range s.Players {
 				if p.ID == cmd.Player.ID {
 					s.Players = append(s.Players[:i], s.Players[i+1:]...)
 					break
 				}
 			}
-		case START:
-
-		case STOP:
+		case "READY":
 
 		default:
 			continue

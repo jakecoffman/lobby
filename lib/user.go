@@ -84,7 +84,7 @@ func (p *User) Run(registry Registry) {
 		p.Disconnect()
 
 		if p.game != nil {
-			p.game.Send(&PlayerCmd{Type: DISCONNECT, Player: p})
+			p.game.Send(&PlayerCmd{Type: "DISCONNECT", Player: p})
 		}
 	}()
 
@@ -114,55 +114,56 @@ func (p *User) handle(cmd *PlayerCmd) {
 	var simple string
 	log.Println(cmd.Type, string(cmd.Cmd))
 	switch cmd.Type {
-	case RENAME:
+	case "RENAME":
 		if simple, err = cmd.SimpleCmd(); err != nil {
-			// TODO: send error message
+			p.Send(&SimpleMsg{Type: "error", Msg: err.Error()})
 			log.Println(err)
 			return
 		}
 		p.Name = simple
-	case NEW:
+	case "NEW":
 		if simple, err = cmd.SimpleCmd(); err != nil {
-			// TODO: send error message
+			p.Send(&SimpleMsg{Type: "error", Msg: err.Error()})
 			log.Println(err)
 			return
 		}
 		p.game, err = p.registry.Start(simple)
 		if err != nil {
-			// TODO: send error message
+			p.Send(&SimpleMsg{Type: "error", Msg: err.Error()})
 			log.Println(err)
 			return
 		}
 		log.Println("Player", p.GetName(), "started game", p.game)
-	case FIND: // for finding game & game ID by code or game id
+	case "FIND": // for finding game & game ID by code or game id
 		if simple, err = cmd.SimpleCmd(); err != nil {
-			// TODO: send error message
+			p.Send(&SimpleMsg{Type: "error", Msg: err.Error()})
 			log.Println(err)
 			return
 		}
 		var game Game
 		game, err = p.registry.Find(simple)
 		if err != nil {
+			p.Send(&SimpleMsg{Type: "error", Msg: err.Error()})
 			log.Println(err)
-			// TODO: tell player game was not found
 			return
 		}
 		p.Send(struct{ Type, Goto string }{"goto", game.Location()})
-	case JOIN: // for joining (by ID or code)
+	case "JOIN": // for joining (by ID or code)
 		if simple, err = cmd.SimpleCmd(); err != nil {
-			// TODO: send error message
+			p.Send(&SimpleMsg{Type: "error", Msg: err.Error()})
 			log.Println(err)
 			return
 		}
 		p.game, err = p.registry.Find(simple)
 		if err != nil {
+			p.Send(&SimpleMsg{Type: "error", Msg: err.Error()})
 			log.Println(err)
 		}
-	case LEAVE:
+	case "LEAVE":
 		// set game to default game?
 		p.game.Send(cmd)
 		p.game, _ = p.registry.Find("lobby")
-		p.game.Send(&PlayerCmd{Type: JOIN, Player: p})
+		p.game.Send(&PlayerCmd{Type: "JOIN", Player: p})
 		return
 	}
 	// send to game if there is one
