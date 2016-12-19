@@ -36,6 +36,11 @@ type Spyfall struct {
 	cmds chan *lib.PlayerCmd
 }
 
+type Player struct {
+	lib.User
+	Ready bool
+}
+
 const (
 	START int = iota + 100
 	STOP
@@ -100,11 +105,22 @@ func (s *Spyfall) Send(cmd *lib.PlayerCmd) {
 type state struct {
 	Type    string
 	Spyfall *Spyfall
+	You     *you
+}
+
+type you struct {
+	IsSpy    bool
+	Location string `json:"omitempty"`
+	Role     string `json:"omitempty"`
 }
 
 func (s *Spyfall) update() {
 	for _, p := range s.Players {
-		_ = p.Send(state{Type: "spyfall", Spyfall: s})
+		_ = p.Send(state{
+			Type:    "spyfall",
+			Spyfall: s,
+			You:     &you{IsSpy: true, Location: "France", Role: "Pants"},
+		})
 	}
 }
 
