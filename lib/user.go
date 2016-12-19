@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"encoding/json"
 	"github.com/jakecoffman/gorest"
 	"gopkg.in/mgo.v2/bson"
 	"io"
@@ -24,8 +23,8 @@ type User struct {
 	registry   Registry
 	connection Connector
 	game       Game
-	Recv       chan *PlayerCmd `bson:"-",json:"-"`
-	Done       chan struct{}   `bson:"-",json:"-"`
+	recv       chan *PlayerCmd
+	done       chan struct{}
 
 	Connected bool
 }
@@ -59,8 +58,8 @@ func (p *User) Connect(connection Connector, registry Registry) {
 	p.registry = registry
 	p.connection = connection
 	p.Connected = true
-	p.Recv = make(chan *PlayerCmd)
-	p.Done = make(chan struct{})
+	p.recv = make(chan *PlayerCmd)
+	p.done = make(chan struct{})
 	p.Unlock()
 }
 
@@ -99,10 +98,10 @@ func (p *User) Run(registry Registry) {
 	for {
 		select {
 		// Server or the receive channel has signalled a disconnect
-		case <-p.Done:
+		case <-p.done:
 			return
 		// Handle messages from connection
-		case cmd = <-p.Recv:
+		case cmd = <-p.recv:
 			cmd.Player = p
 			p.handle(cmd)
 		}
@@ -180,13 +179,13 @@ func (p *User) sendLoop() {
 			if err != io.EOF {
 				log.Println(err)
 			}
-			close(p.Done)
+			close(p.done)
 			p.Disconnect()
 			return
 		}
 		select {
-		case p.Recv <- incoming:
-		case <-p.Done:
+		case p.recv <- incoming:
+		case <-p.done:
 			return
 		}
 	}
@@ -204,16 +203,4 @@ func FindUser(id string) (*User, error) {
 
 func InsertUser(user *User) error {
 	return DB.C(USER).Insert(user)
-}
-
-func (u *User) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		ID        string
-		Name      string
-		Connected bool
-	}{
-		u.ID,
-		u.Name,
-		u.Connected,
-	})
 }

@@ -57,6 +57,8 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 	for {
 		cmd := <-s.cmds
 
+		log.Println("SPYFALL", cmd.Type, string(cmd.Cmd))
+
 		switch cmd.Type {
 		case "NEW":
 			s.Players = append(s.Players, &Player{User: cmd.Player})
@@ -83,7 +85,13 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 				}
 			}
 		case "READY":
-
+			for i, p := range s.Players {
+				if p.ID == cmd.Player.ID {
+					s.Players[i].Ready = !s.Players[i].Ready
+					log.Println(s.Players[i])
+					break
+				}
+			}
 		default:
 			continue
 		}
@@ -105,6 +113,7 @@ type you struct {
 	IsSpy    bool
 	Location string `json:"omitempty"`
 	Role     string `json:"omitempty"`
+	Ready    bool
 }
 
 func (s *Spyfall) update() {
@@ -112,7 +121,7 @@ func (s *Spyfall) update() {
 		_ = p.Send(state{
 			Type:    "spyfall",
 			Spyfall: s,
-			You:     &you{IsSpy: true, Location: "France", Role: "Pants"},
+			You:     &you{IsSpy: true, Location: "France", Role: "Pants", Ready: p.Ready},
 		})
 	}
 }
