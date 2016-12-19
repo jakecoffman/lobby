@@ -7,6 +7,7 @@ import (
 	"golang.org/x/net/websocket"
 	"gopkg.in/mgo.v2"
 	"log"
+	"time"
 )
 
 var db *mgo.Database
@@ -28,12 +29,14 @@ func Install(router *gin.Engine, db *mgo.Database, registry *lib.InMemoryRegistr
 }
 
 type Spyfall struct {
-	Id         string
-	Code       string
-	Players    []*Player
-	InProgress bool
+	Id       string
+	Code     string
+	Players  []*Player
+	Watchers []*lib.User
+	Started  bool
 
-	cmds chan *lib.PlayerCmd
+	cmds      chan *lib.PlayerCmd
+	timerDone chan struct{}
 }
 
 type Player struct {
@@ -76,7 +79,12 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 				s.Players = append(s.Players, &Player{User: cmd.Player})
 			}
 		case "DISCONNECT":
-
+			for _, p := range s.Players {
+				if p.ID == cmd.Player.ID {
+					p.Ready = false
+					break
+				}
+			}
 		case "LEAVE":
 			for i, p := range s.Players {
 				if p.ID == cmd.Player.ID {
@@ -85,12 +93,66 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 				}
 			}
 		case "READY":
+			if s.Started {
+				// ignore READY when game is started
+			}
+			allReady := true
 			for i, p := range s.Players {
 				if p.ID == cmd.Player.ID {
 					s.Players[i].Ready = !s.Players[i].Ready
 					log.Println(s.Players[i])
-					break
 				}
+				if p.Ready == false {
+					allReady = false
+				}
+			}
+			s.update()
+			// TRIGGER GAME START SEQUENCE
+			if allReady {
+				s.Started = true
+				s.broadcast(&lib.SimpleMsg{
+					Type: "starting",
+					Msg:  "Game starts in 3",
+				})
+				time.Sleep(time.Second)
+				s.broadcast(&lib.SimpleMsg{
+					Type: "starting",
+					Msg:  "Game starts in 2",
+				})
+				time.Sleep(time.Second)
+				s.broadcast(&lib.SimpleMsg{
+					Type: "starting",
+					Msg:  "Game starts in 1",
+				})
+				s.timerDone = make(chan struct{})
+				go func() {
+					total := 8 * time.Minute
+					s.broadcast(&lib.SimpleMsg{
+						Type: "tick",
+						Msg:  total.String(),
+					})
+					for {
+						second := time.After(time.Second)
+						select {
+						case <-second:
+							total = total - time.Second
+							s.broadcast(&lib.SimpleMsg{
+								Type: "tick",
+								Msg:  total.String(),
+							})
+							if total.Seconds() < 1 {
+								s.Started = false
+								for _, p := range s.Players {
+									p.Ready = false
+								}
+								s.update()
+								return
+							}
+						case <-s.timerDone:
+							return
+						}
+					}
+				}()
 			}
 		default:
 			continue
@@ -123,6 +185,12 @@ func (s *Spyfall) update() {
 			Spyfall: s,
 			You:     &you{IsSpy: true, Location: "France", Role: "Pants", Ready: p.Ready},
 		})
+	}
+}
+
+func (s *Spyfall) broadcast(v interface{}) {
+	for _, p := range s.Players {
+		_ = p.Send(v)
 	}
 }
 
