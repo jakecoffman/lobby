@@ -37,8 +37,9 @@ func main() {
 }
 
 func bootstrap() {
-	lib.DB.DropDatabase()
 	lib.InsertUser(&lib.User{ID: "admin", Name: "admin"})
+
+	// load registry from database into mem
 }
 
 func route(db *mgo.Database) *gin.Engine {

@@ -111,7 +111,7 @@ func (p *User) Run(registry Registry) {
 func (p *User) handle(cmd *PlayerCmd) {
 	var err error
 	var simple string
-	log.Println(cmd.Type, string(cmd.Cmd))
+
 	switch cmd.Type {
 	case "RENAME":
 		if simple, err = cmd.SimpleCmd(); err != nil {
