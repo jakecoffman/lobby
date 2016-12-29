@@ -43,8 +43,10 @@ type Spyfall struct {
 	Watchers []*lib.User `json:",omitempty"`
 	Started  bool
 
-	cmds      chan *lib.PlayerCmd
-	timerDone chan struct{}
+	EndsAt time.Time
+
+	cmds  chan *lib.PlayerCmd
+	timer *time.Timer
 }
 
 type Player struct {
@@ -53,8 +55,7 @@ type Player struct {
 	Stop  bool // vote to stop game in progress
 	First bool
 
-	// secret information sent only to the player
-	spy      bool
+	spy      bool // secret information sent only to the player
 	location string
 	role     string
 }
@@ -72,6 +73,7 @@ type you struct {
 	Location string `json:",omitempty"`
 	Role     string `json:",omitempty"`
 	Ready    bool
+	Stop     bool
 }
 
 func (s *Spyfall) Init(id, code string) {
@@ -79,6 +81,10 @@ func (s *Spyfall) Init(id, code string) {
 	s.Code = code
 	s.cmds = make(chan *lib.PlayerCmd)
 	s.Players = []*Player{}
+	s.timer = time.NewTimer(1 * time.Minute)
+	if !s.timer.Stop() {
+		<-s.timer.C
+	}
 	log.Println("New game initialized", s)
 }
 
@@ -87,8 +93,21 @@ func (s *Spyfall) ID() string {
 }
 
 func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
+	var cmd *lib.PlayerCmd
+	var ok bool
 	for {
-		cmd := <-s.cmds
+		select {
+		case cmd, ok = <-s.cmds:
+			if !ok {
+				s.cmds = nil
+				return
+			}
+		case <-s.timer.C:
+			log.Println("Time ended")
+			s.Reset()
+			s.update()
+			continue
+		}
 
 		switch cmd.Type {
 		case "NEW":
@@ -142,7 +161,14 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 				}
 			}
 			if allStop {
-				close(s.timerDone)
+				log.Println("Everyone stopped")
+				if !s.timer.Stop() {
+					log.Println("Draining channel")
+					<-s.timer.C
+				}
+				s.Reset()
+				s.update()
+				continue
 			}
 		case "READY":
 			if s.Started {
@@ -200,42 +226,8 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 				Msg:  "Game starts in 1",
 			})
 			time.Sleep(time.Second)
-			s.timerDone = make(chan struct{})
-			go func() {
-				defer func() {
-					s.Started = false
-					for _, p := range s.Players {
-						p.Ready = false
-						p.First = false
-						p.spy = false
-						p.location = ""
-						p.role = ""
-					}
-					s.update()
-				}()
-
-				total := 8 * time.Minute
-				s.broadcast(&lib.SimpleMsg{
-					Type: "tick",
-					Msg:  total.String(),
-				})
-				for {
-					second := time.After(time.Second)
-					select {
-					case <-second:
-						total = total - time.Second
-						s.broadcast(&lib.SimpleMsg{
-							Type: "tick",
-							Msg:  total.String(),
-						})
-						if total.Seconds() < 1 {
-							return
-						}
-					case <-s.timerDone:
-						return
-					}
-				}
-			}()
+			s.EndsAt = time.Now().Add(8 * time.Minute)
+			s.timer = time.NewTimer(8 * time.Minute)
 		default:
 			continue
 		}
@@ -245,6 +237,18 @@ func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
 
 func (s *Spyfall) Send(cmd *lib.PlayerCmd) {
 	s.cmds <- cmd
+}
+
+func (s *Spyfall) Reset() {
+	s.Started = false
+	for _, p := range s.Players {
+		p.Ready = false
+		p.Stop = false
+		p.First = false
+		p.spy = false
+		p.location = ""
+		p.role = ""
+	}
 }
 
 func (s *Spyfall) update() {
@@ -257,6 +261,7 @@ func (s *Spyfall) update() {
 				Location: p.location,
 				Role:     p.role,
 				Ready:    p.Ready,
+				Stop:     p.Stop,
 			},
 		})
 	}
