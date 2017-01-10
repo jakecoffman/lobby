@@ -65,7 +65,7 @@ func (r *InMemoryRegistry) Start(name string) (Game, error) {
 		r.gips[code] = game
 		r.lookup[id] = code
 		log.Println("Starting game", name, code, id)
-		go game.Run(r)
+		go game.Run()
 		return game, nil
 	}
 }

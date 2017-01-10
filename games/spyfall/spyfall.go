@@ -92,7 +92,7 @@ func (s *Spyfall) ID() string {
 	return s.Id
 }
 
-func (s *Spyfall) Run(registry *lib.InMemoryRegistry) {
+func (s *Spyfall) Run() {
 	var cmd *lib.PlayerCmd
 	var ok bool
 	for {

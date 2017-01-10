@@ -49,5 +49,9 @@ func route(db *mgo.Database) *gin.Engine {
 		user := ctx.MustGet("player").(*lib.User)
 		ctx.JSON(200, user)
 	})
+	router.NoRoute(func(ctx *gin.Context) {
+		log.Println("404", ctx.Request.URL)
+		ctx.JSON(404, map[string]string{"error": "no route"})
+	})
 	return router
 }

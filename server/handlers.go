@@ -77,6 +77,8 @@ func WSMiddleware(conn *websocket.Conn) (*lib.User, error) {
 		}
 	}
 
+	user.Send(map[string]interface{}{"Type": "me", "Me": user})
+
 	return user, nil
 }
 

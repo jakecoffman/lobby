@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/json"
 	"github.com/jakecoffman/gorest"
 	"gopkg.in/mgo.v2/bson"
 	"io"
@@ -45,11 +46,23 @@ func (u *User) Valid() bool {
 	return string(u.ID) != ""
 }
 
+func (u *User) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		ID        string
+		Name      string
+		Connected bool
+	}{
+		ID:        u.ID,
+		Name:      u.GetName(),
+		Connected: u.Connected,
+	})
+}
+
 func (u User) GetName() string {
 	if u.Name != "" {
 		return u.Name
 	} else {
-		return u.ID[len(u.ID)-5:]
+		return "Guest " + u.ID[len(u.ID)-5:]
 	}
 }
 
@@ -158,12 +171,6 @@ func (p *User) handle(cmd *PlayerCmd) {
 			p.Send(&SimpleMsg{Type: "error", Msg: err.Error()})
 			log.Println(err)
 		}
-	case "LEAVE":
-		// set game to default game?
-		p.game.Send(cmd)
-		p.game, _ = p.registry.Find("lobby")
-		p.game.Send(&PlayerCmd{Type: "JOIN", Player: p})
-		return
 	}
 	// send to game if there is one
 	if p.game != nil {
