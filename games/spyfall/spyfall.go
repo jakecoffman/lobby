@@ -146,6 +146,9 @@ func (s *Spyfall) Run() {
 					break
 				}
 			}
+			if len(s.Players) == 0 {
+				return
+			}
 		case "STOP":
 			if !s.Started {
 				// ignore STOP when game is not started

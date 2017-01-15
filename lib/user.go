@@ -46,6 +46,10 @@ func (u *User) Valid() bool {
 	return string(u.ID) != ""
 }
 
+func (u User) String() string {
+	return "Player: " + u.ID
+}
+
 func (u *User) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		ID        string
