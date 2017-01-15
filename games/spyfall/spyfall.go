@@ -50,7 +50,7 @@ type Spyfall struct {
 }
 
 type Player struct {
-	*lib.User
+	User  *lib.User
 	Ready bool
 	Stop  bool // vote to stop game in progress
 	First bool
@@ -116,7 +116,7 @@ func (s *Spyfall) Run() {
 			// check if this is a rejoin
 			found := false
 			for i, p := range s.Players {
-				if p.ID == cmd.Player.ID {
+				if p.User.ID == cmd.Player.ID {
 					found = true
 					s.Players[i].User = cmd.Player
 					break
@@ -134,14 +134,14 @@ func (s *Spyfall) Run() {
 			}
 		case "DISCONNECT":
 			for _, p := range s.Players {
-				if p.ID == cmd.Player.ID {
+				if p.User.ID == cmd.Player.ID {
 					p.Ready = false
 					break
 				}
 			}
 		case "LEAVE":
 			for i, p := range s.Players {
-				if p.ID == cmd.Player.ID {
+				if p.User.ID == cmd.Player.ID {
 					s.Players = append(s.Players[:i], s.Players[i+1:]...)
 					break
 				}
@@ -156,7 +156,7 @@ func (s *Spyfall) Run() {
 			}
 			allStop := true
 			for _, p := range s.Players {
-				if p.ID == cmd.Player.ID {
+				if p.User.ID == cmd.Player.ID {
 					p.Stop = !p.Stop
 				}
 				if !p.Stop {
@@ -180,7 +180,7 @@ func (s *Spyfall) Run() {
 			}
 			allReady := true
 			for i, p := range s.Players {
-				if p.ID == cmd.Player.ID {
+				if p.User.ID == cmd.Player.ID {
 					s.Players[i].Ready = !s.Players[i].Ready
 				}
 				if p.Ready == false {
@@ -256,7 +256,7 @@ func (s *Spyfall) Reset() {
 
 func (s *Spyfall) update() {
 	for _, p := range s.Players {
-		_ = p.Send(state{
+		_ = p.User.Send(state{
 			Type:    "spyfall",
 			Spyfall: s,
 			You: &you{
@@ -272,7 +272,7 @@ func (s *Spyfall) update() {
 
 func (s *Spyfall) broadcast(v interface{}) {
 	for _, p := range s.Players {
-		_ = p.Send(v)
+		_ = p.User.Send(v)
 	}
 }
 

@@ -1,12 +1,13 @@
 package spyfall
 
 import (
-	"testing"
+	"encoding/json"
 	"github.com/jakecoffman/lobby/lib"
 	"log"
+	"testing"
 )
 
-type MockRegistry struct {}
+type MockRegistry struct{}
 
 func (m *MockRegistry) Register(lib.Game, string) {
 
@@ -21,25 +22,29 @@ func (m *MockRegistry) Find(string) (lib.Game, error) {
 }
 
 type MockConn struct {
-	send chan interface{}
-	recv chan interface{}
+	send chan []byte
+	recv chan []byte
 }
 
 func NewMockConn() *MockConn {
 	return &MockConn{
-		send: make(chan interface{}, 3),
-		recv: make(chan interface{}, 3),
+		send: make(chan []byte, 3),
+		recv: make(chan []byte, 3),
 	}
 }
 
 func (c *MockConn) Send(v interface{}) error {
-	c.send <- v
+	bytes, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	c.send <- bytes
 	return nil
 }
 
 func (c *MockConn) Recv(v interface{}) error {
-	v = <- c.recv
-	return nil
+	bytes := <-c.recv
+	return json.Unmarshal(bytes, v)
 }
 
 func (c *MockConn) Close() error {
@@ -48,16 +53,22 @@ func (c *MockConn) Close() error {
 }
 
 func (c *MockConn) TestSend(v interface{}) {
-	c.recv <- v
+	if bytes, err := json.Marshal(v); err != nil {
+		panic(err)
+	} else {
+		c.recv <- bytes
+	}
 }
 
-func (c *MockConn) TestRecv() (interface{}, bool) {
-	v, ok := <- c.send
-	return v, ok
+func (c *MockConn) TestRecv(v interface{}) {
+	bytes := <-c.send
+	if err := json.Unmarshal(bytes, v); err != nil {
+		panic(err)
+	}
 }
 
 func TestSpyfall(t *testing.T) {
-	var msg interface{}
+	msg := &state{}
 
 	p1 := &lib.User{ID: "1", Name: "P1"}
 	p2 := &lib.User{ID: "2", Name: "P2"}
@@ -74,18 +85,23 @@ func TestSpyfall(t *testing.T) {
 	go s.Run()
 
 	s.Send(lib.NewSimpleCmd("JOIN", "", p1))
-	msg, _ = conn1.TestRecv()
-	log.Printf("%#v\n", msg.(state).Spyfall)
+	conn1.TestRecv(msg)
 
 	s.Send(lib.NewSimpleCmd("JOIN", "", p2))
-	msg, _ = conn1.TestRecv()
-	log.Println(msg)
-	msg, _ = conn2.TestRecv()
-	log.Println(msg)
+	conn1.TestRecv(msg)
+	conn2.TestRecv(msg)
+
+	s.Send(lib.NewSimpleCmd("READY", "", p1))
+	conn1.TestRecv(msg)
+	conn2.TestRecv(msg)
+
+	players := msg.Spyfall.Players
+	if players[0].Ready != true && players[1].Ready != true {
+		t.Fatal("Neither player sent their correct readyness")
+	}
 
 	s.Send(lib.NewSimpleCmd("LEAVE", "", p1))
-	msg, _ = conn2.TestRecv()
-	log.Println(msg)
+	conn2.TestRecv(msg)
 
 	s.Send(lib.NewSimpleCmd("LEAVE", "", p2))
 

@@ -25,8 +25,6 @@ func (l *Places) Load() {
 	for k := range l.Roles {
 		l.Locations = append(l.Locations, k)
 	}
-	log.Println("ROLES:", l.Roles)
-	log.Println("LOCATIONS:", l.Locations)
 }
 
 func locations() []byte {
