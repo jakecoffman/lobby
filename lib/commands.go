@@ -12,6 +12,10 @@ type PlayerCmd struct {
 	simple string `json:"-"`
 }
 
+func NewPlayerCmd(typ string, player *User) *PlayerCmd {
+	return &PlayerCmd{Type: typ, Player: player}
+}
+
 func NewSimpleCmd(typ, msg string, player *User) *PlayerCmd {
 	return &PlayerCmd{Type: typ, simple: msg, Player: player}
 }

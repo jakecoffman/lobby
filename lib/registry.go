@@ -15,40 +15,33 @@ func init() {
 	rand.Seed(time.Now().Unix())
 }
 
-type Registry interface {
-	Register(Game, string)
-	Start(string) (Game, error)
-	Find(string) (Game, error)
-}
-
-type InMemoryRegistry struct {
+// Registry's job is to keep a list of possible games,
+// a list of the running games,
+// and manage the short "join codes"
+type Registry struct {
 	sync.RWMutex
 	games  map[string]reflect.Type
-	gips   map[string]Game   // code -> game
+	gips   map[string]Game   // code -> game in progress
 	lookup map[string]string // id -> code
 }
 
-func NewInMemoryRegistry() *InMemoryRegistry {
-	return &InMemoryRegistry{
+func NewInMemoryRegistry() *Registry {
+	return &Registry{
 		games:  map[string]reflect.Type{},
 		gips:   map[string]Game{},
 		lookup: map[string]string{},
 	}
 }
 
-func (r *InMemoryRegistry) Register(game Game, name string) {
+// Register a game
+func (r *Registry) Register(game Game, name string) {
 	r.Lock()
 	r.games[name] = reflect.TypeOf(game).Elem()
 	r.Unlock()
 }
 
-func (r *InMemoryRegistry) Singleton(game Game, name string) {
-	r.Lock()
-	r.gips[name] = game
-	r.Unlock()
-}
-
-func (r *InMemoryRegistry) Start(name string) (Game, error) {
+// Start an instance of a game
+func (r *Registry) Start(name string) (Game, error) {
 	r.RLock()
 	gameType, ok := r.games[name]
 	r.RUnlock()
@@ -58,8 +51,8 @@ func (r *InMemoryRegistry) Start(name string) (Game, error) {
 		r.Lock()
 		defer r.Unlock()
 		game := reflect.New(gameType).Interface().(Game)
-		// TODO: create 7 digit code users can join each-others games off of
 		id := bson.NewObjectId().Hex()
+		// TODO this should be an in-memory key to the game, recycle when everyone disconnects?
 		code := gen(7)
 		game.Init(id, code)
 		r.gips[code] = game
@@ -68,16 +61,19 @@ func (r *InMemoryRegistry) Start(name string) (Game, error) {
 		go game.Run()
 		return game, nil
 	}
+
+	// TODO save in mongo the lookup maps
 }
 
-func (r *InMemoryRegistry) Find(codeOrId string) (Game, error) {
+// Find looks up a game instance by code or ID
+func (r *Registry) Find(codeOrId string) (Game, error) {
 	r.RLock()
 	var game Game
-	code, ok := r.lookup[codeOrId]
+	code, ok := r.lookup[codeOrId] // try id
 	if !ok {
-		game, ok = r.gips[codeOrId]
+		game, ok = r.gips[codeOrId] // try code
 	} else {
-		game, ok = r.gips[code]
+		game, ok = r.gips[code] // it was an ID
 	}
 	r.RUnlock()
 	if !ok {
@@ -86,10 +82,10 @@ func (r *InMemoryRegistry) Find(codeOrId string) (Game, error) {
 	return game, nil
 }
 
-// with size = 7, there are 4,294,967,296 possibilities
+// with size = 7, there are 10^7 (10 million) possibilities
 func gen(size int) string {
 	// 32 chars
-	chars := strings.Split("23456789abcdefghijkmnpqrstuvwxyz", "") // no 0, o, 1, l
+	chars := strings.Split("0123456789", "") // no 0, o, 1, l
 	code := ""
 	for i := 0; i < size; i++ {
 		code += chars[rand.Intn(len(chars))]

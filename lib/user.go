@@ -16,12 +16,11 @@ const (
 type User struct {
 	sync.RWMutex `bson:"-",json:"-"`
 
-	// These can only be changed from REST API
 	ID   string `bson:"_id"`
 	Name string
 
 	// These are for during games when a player does stuff.
-	registry   Registry
+	registry   *Registry
 	connection Connector
 	game       Game
 	recv       chan *PlayerCmd
@@ -70,9 +69,8 @@ func (u User) GetName() string {
 	}
 }
 
-func (p *User) Connect(connection Connector, registry Registry) {
+func (p *User) Connect(connection Connector) {
 	p.Lock()
-	p.registry = registry
 	p.connection = connection
 	p.Connected = true
 	p.recv = make(chan *PlayerCmd)
@@ -95,7 +93,7 @@ func (u *User) receive(v interface{}) error {
 	return u.connection.Recv(v)
 }
 
-func (p *User) Run(registry Registry) {
+func (p *User) Run(registry *Registry) {
 	defer func() {
 		p.Disconnect()
 
@@ -108,8 +106,6 @@ func (p *User) Run(registry Registry) {
 
 	// Process incoming messages with a channel since it blocks
 	go p.sendLoop()
-
-	// todo automatically rejoin a game disconnected from, or join lobby
 
 	cmd := &PlayerCmd{}
 	for {
@@ -125,6 +121,7 @@ func (p *User) Run(registry Registry) {
 	}
 }
 
+// handle handles commands that are common for all games
 func (p *User) handle(cmd *PlayerCmd) {
 	var err error
 	var simple string

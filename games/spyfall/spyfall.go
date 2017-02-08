@@ -5,20 +5,16 @@ import (
 	"github.com/jakecoffman/lobby/lib"
 	"github.com/jakecoffman/lobby/server"
 	"golang.org/x/net/websocket"
-	"gopkg.in/mgo.v2"
 	"log"
 	"math/rand"
 	"time"
 )
 
-var db *mgo.Database
-
 func init() {
 	rand.Seed(time.Now().Unix())
 }
 
-func Install(router *gin.Engine, db *mgo.Database, registry *lib.InMemoryRegistry) {
-	db = db
+func Install(router *gin.Engine, registry *lib.Registry) {
 	registry.Register(&Spyfall{}, "spyfall")
 	router.GET("/spyfall", func(ctx *gin.Context) {
 		websocket.Handler(func(conn *websocket.Conn) {
@@ -76,6 +72,7 @@ type you struct {
 	Stop     bool
 }
 
+// Init is called when creating a new game
 func (s *Spyfall) Init(id, code string) {
 	s.Id = id
 	s.Code = code
@@ -86,6 +83,7 @@ func (s *Spyfall) Init(id, code string) {
 		<-s.timer.C
 	}
 	log.Println("New game initialized", s)
+	// TODO: save to mongo
 }
 
 func (s *Spyfall) ID() string {
@@ -139,6 +137,7 @@ func (s *Spyfall) Run() {
 					break
 				}
 			}
+			// TODO after a certain amount of time leave
 		case "LEAVE":
 			for i, p := range s.Players {
 				if p.User.ID == cmd.Player.ID {
@@ -164,14 +163,10 @@ func (s *Spyfall) Run() {
 				}
 			}
 			if allStop {
-				log.Println("Everyone stopped")
 				if !s.timer.Stop() {
-					log.Println("Draining channel")
 					<-s.timer.C
 				}
 				s.Reset()
-				s.update()
-				continue
 			}
 		case "READY":
 			if s.Started {
@@ -235,6 +230,7 @@ func (s *Spyfall) Run() {
 			continue
 		}
 		s.update()
+		// TODO: save to Mongo
 	}
 }
 
