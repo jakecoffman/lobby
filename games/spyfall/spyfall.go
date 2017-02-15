@@ -5,8 +5,10 @@ import (
 	"github.com/jakecoffman/lobby/lib"
 	"github.com/jakecoffman/lobby/server"
 	"golang.org/x/net/websocket"
+	"gopkg.in/mgo.v2"
 	"log"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -33,7 +35,7 @@ func Install(router *gin.Engine, registry *lib.Registry) {
 }
 
 type Spyfall struct {
-	Id       string
+	Id       string `bson:"_id"`
 	Code     string
 	Players  []*Player
 	Watchers []*lib.User `json:",omitempty"`
@@ -43,6 +45,7 @@ type Spyfall struct {
 
 	cmds  chan *lib.PlayerCmd
 	timer *time.Timer
+	db    *mgo.Database
 }
 
 type Player struct {
@@ -72,12 +75,19 @@ type you struct {
 	Stop     bool
 }
 
+var (
+	gameDuration      = 8 * time.Minute
+	countdownDuration = 1 * time.Second
+)
+
 // Init is called when creating a new game
-func (s *Spyfall) Init(id, code string) {
+func (s *Spyfall) Init(id, code string, db *mgo.Database) {
 	s.Id = id
 	s.Code = code
+	s.db = db
 	s.cmds = make(chan *lib.PlayerCmd)
 	s.Players = []*Player{}
+
 	s.timer = time.NewTimer(1 * time.Minute)
 	if !s.timer.Stop() {
 		<-s.timer.C
@@ -92,20 +102,16 @@ func (s *Spyfall) ID() string {
 
 func (s *Spyfall) Run() {
 	var cmd *lib.PlayerCmd
-	var ok bool
 	for {
 		select {
-		case cmd, ok = <-s.cmds:
-			if !ok {
-				s.cmds = nil
-				return
-			}
+		case cmd = <-s.cmds:
 		case <-s.timer.C:
-			log.Println("Time ended")
 			s.Reset()
 			s.update()
 			continue
 		}
+
+		log.Println("Processing", cmd.Type, "from player", cmd.Player.ID)
 
 		switch cmd.Type {
 		case "NEW":
@@ -146,6 +152,7 @@ func (s *Spyfall) Run() {
 				}
 			}
 			if len(s.Players) == 0 {
+				// shut down game
 				return
 			}
 		case "STOP":
@@ -185,7 +192,7 @@ func (s *Spyfall) Run() {
 			s.update()
 
 			if !allReady {
-				break
+				continue
 			}
 
 			// TRIGGER GAME START SEQUENCE
@@ -213,19 +220,19 @@ func (s *Spyfall) Run() {
 				Type: "starting",
 				Msg:  "Game starts in 3",
 			})
-			time.Sleep(time.Second)
+			time.Sleep(countdownDuration)
 			s.broadcast(&lib.SimpleMsg{
 				Type: "starting",
 				Msg:  "Game starts in 2",
 			})
-			time.Sleep(time.Second)
+			time.Sleep(countdownDuration)
 			s.broadcast(&lib.SimpleMsg{
 				Type: "starting",
 				Msg:  "Game starts in 1",
 			})
-			time.Sleep(time.Second)
-			s.EndsAt = time.Now().Add(8 * time.Minute)
-			s.timer = time.NewTimer(8 * time.Minute)
+			time.Sleep(countdownDuration)
+			s.EndsAt = time.Now().Add(gameDuration)
+			s.timer = time.NewTimer(gameDuration)
 		default:
 			continue
 		}
@@ -251,19 +258,31 @@ func (s *Spyfall) Reset() {
 }
 
 func (s *Spyfall) update() {
-	for _, p := range s.Players {
-		_ = p.User.Send(state{
-			Type:    "spyfall",
-			Spyfall: s,
-			You: &you{
-				Spy:      p.spy,
-				Location: p.location,
-				Role:     p.role,
-				Ready:    p.Ready,
-				Stop:     p.Stop,
-			},
-		})
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		s.Save()
+		wg.Done()
+	}()
+
+	wg.Add(len(s.Players))
+	for _, player := range s.Players {
+		go func(p *Player, spyfall *Spyfall) {
+			p.User.Send(state{
+				Type:    "spyfall",
+				Spyfall: spyfall,
+				You: &you{
+					Spy:      p.spy,
+					Location: p.location,
+					Role:     p.role,
+					Ready:    p.Ready,
+					Stop:     p.Stop,
+				},
+			})
+			wg.Done()
+		}(player, s)
 	}
+	wg.Wait()
 }
 
 func (s *Spyfall) broadcast(v interface{}) {
@@ -278,4 +297,11 @@ func (s *Spyfall) String() string {
 
 func (s *Spyfall) Location() string {
 	return "spyfall/" + s.Id
+}
+
+func (s Spyfall) Save() {
+	_, err := s.db.C("spyfall").UpsertId(s.Id, s)
+	if err != nil {
+		log.Println("Failed saving spyfall", s.Id, "error:", err)
+	}
 }

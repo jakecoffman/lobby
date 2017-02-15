@@ -12,8 +12,8 @@ type MockConn struct {
 
 func NewMockConn() *MockConn {
 	return &MockConn{
-		send: make(chan []byte, 3),
-		recv: make(chan []byte, 3),
+		send: make(chan []byte),
+		recv: make(chan []byte),
 	}
 }
 
