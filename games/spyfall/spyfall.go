@@ -5,7 +5,6 @@ import (
 	"github.com/jakecoffman/lobby/lib"
 	"github.com/jakecoffman/lobby/server"
 	"golang.org/x/net/websocket"
-	"gopkg.in/mgo.v2"
 	"log"
 	"math/rand"
 	"sync"
@@ -45,7 +44,6 @@ type Spyfall struct {
 
 	cmds  chan *lib.PlayerCmd
 	timer *time.Timer
-	db    *mgo.Database
 }
 
 type Player struct {
@@ -81,10 +79,9 @@ var (
 )
 
 // Init is called when creating a new game
-func (s *Spyfall) Init(id, code string, db *mgo.Database) {
+func (s *Spyfall) Init(id, code string) {
 	s.Id = id
 	s.Code = code
-	s.db = db
 	s.cmds = make(chan *lib.PlayerCmd)
 	s.Players = []*Player{}
 
@@ -259,11 +256,6 @@ func (s *Spyfall) Reset() {
 
 func (s *Spyfall) update() {
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		s.Save()
-		wg.Done()
-	}()
 
 	wg.Add(len(s.Players))
 	for _, player := range s.Players {
@@ -297,11 +289,4 @@ func (s *Spyfall) String() string {
 
 func (s *Spyfall) Location() string {
 	return "spyfall/" + s.Id
-}
-
-func (s Spyfall) Save() {
-	_, err := s.db.C("spyfall").UpsertId(s.Id, s)
-	if err != nil {
-		log.Println("Failed saving spyfall", s.Id, "error:", err)
-	}
 }

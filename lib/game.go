@@ -1,9 +1,7 @@
 package lib
 
-import "gopkg.in/mgo.v2"
-
 type Game interface {
-	Init(string, string, *mgo.Database)
+	Init(string, string)
 	ID() string
 	Run()
 	Send(*PlayerCmd)

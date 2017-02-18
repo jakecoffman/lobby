@@ -54,7 +54,7 @@ func (r *Registry) Start(name string) (Game, error) {
 		id := bson.NewObjectId().Hex()
 		// TODO this should be an in-memory key to the game, recycle when everyone disconnects?
 		code := gen(7)
-		game.Init(id, code, DB)
+		game.Init(id, code)
 		r.gips[code] = game
 		r.lookup[id] = code
 		log.Println("Starting game", name, code, id)

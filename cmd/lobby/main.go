@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/jakecoffman/lobby/games/speed"
 	"github.com/jakecoffman/lobby/games/spyfall"
 	"github.com/jakecoffman/lobby/lib"
 	"github.com/jakecoffman/lobby/server"
@@ -26,6 +27,7 @@ func main() {
 
 	registry := lib.NewInMemoryRegistry()
 	spyfall.Install(r, registry)
+	speed.Install(r, registry)
 
 	r.GET("/debug/pprof/", func(ctx *gin.Context) {
 		pprof.Index(ctx.Writer, ctx.Request)

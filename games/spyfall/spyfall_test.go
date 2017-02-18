@@ -3,7 +3,6 @@ package spyfall
 import (
 	"github.com/jakecoffman/lobby/lib"
 	"github.com/jakecoffman/lobby/mocks"
-	"gopkg.in/mgo.v2"
 	"os"
 	"runtime/pprof"
 	"testing"
@@ -13,13 +12,6 @@ import (
 func TestSpyfall(t *testing.T) {
 	// make testing faster
 	countdownDuration = 0
-
-	session, err := mgo.Dial("localhost")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db := session.DB("lobby_test")
-	db.DropDatabase()
 
 	go func() {
 		<-time.After(8 * time.Second)
@@ -41,7 +33,7 @@ func TestSpyfall(t *testing.T) {
 	p2.Connect(conn2)
 
 	s := &Spyfall{}
-	s.Init("1", "code", db)
+	s.Init("1", "code")
 
 	c := make(chan struct{})
 
